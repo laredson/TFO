@@ -1,0 +1,3 @@
+898724aac83f539fc589118bbe1e8997dafeba061008554326cda92c886d0215  tfo-1.0.0-rc.1-local.zip
+9500ae251a4b5554be443d553c5cceae5dd779fbc138ef9cf7c8f3ba7e63284b  tfo-1.0.0-rc.1-portable.zip
+
