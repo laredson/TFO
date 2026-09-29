@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conexión de TFO</title>
+<style>
+body{font:15px system-ui,sans-serif;margin:0;padding:20px;color:var(--color-text-primary,#202124);background:var(--color-background-primary,#fff)}
+h1{font-size:20px;margin:0 0 8px}p{line-height:1.5}dl{display:grid;grid-template-columns:1fr 1fr;gap:12px}dt,dd{margin:0}dd{font-weight:600}.note{padding:12px;border:1px solid #aaa;border-radius:8px}
+</style>
+<h1>Conexión de TFO</h1>
+<p>Este panel comprueba la conexión. No escribe ni envía prompts.</p>
+<dl><dt>Herramientas del plugin</dt><dd id="mcp">Esperando resultado</dd>
+<dt>Modo declarado</dt><dd id="surface">Sin identificar</dd>
+<dt>Panel conectado al chat</dt><dd id="bridge">Comprobando</dd>
+<dt>Envío de mensajes ofrecido por el panel</dt><dd id="messages">Sin comprobar</dd>
+<dt>Cola automática</dt><dd>No habilitada</dd></dl>
+<p class="note" id="next">Primero se debe comprobar la conexión en el chat de destino.</p>
+<p>La conexión del panel no confirma que TFO pueda esperar el fin de una respuesta, elegir modelo y esfuerzo o verificar el siguiente turno.</p>
+<script>
+const byId = id => document.getElementById(id);
+if (window.parent === window) {
+  byId('mcp').textContent = 'No comprobadas';
+  byId('surface').textContent = 'Vista local';
+  byId('bridge').textContent = 'Fuera del chat';
+  byId('messages').textContent = 'No disponible en esta vista';
+  byId('next').textContent = 'Vista previa local. Para comprobar la conexión real, el chat debe ejecutar tfo_connection_panel. Abrir este archivo o su URL no conecta las herramientas de TFO.';
+} else {
+let initialized = false;
+const timer = setTimeout(() => { if (!initialized) byId('bridge').textContent = 'Sin confirmación del host'; }, 5000);
+function render(data) {
+  if (!data || data.diagnosticOnly !== true) return;
+  byId('mcp').textContent = data.mcpConnected ? 'Conectadas' : 'Sin confirmar';
+  byId('surface').textContent = ({codex:'Codex local', 'chatgpt-chat':'Chat normal', 'chatgpt-work':'ChatGPT Work'})[data.surface] || 'Desconocido';
+  byId('next').textContent = data.surface === 'codex'
+    ? 'La última prueba se detuvo antes de escribir. Falta confirmar la identidad del chat en la interfaz.'
+    : 'Herramienta accesible. Falta implementar y verificar el envío automático para este modo.';
+}
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || !event.data || event.data.jsonrpc !== '2.0') return;
+  const message = event.data;
+  if (message.id === 'tfo-connect-v1') {
+    clearTimeout(timer);
+    if (message.error) { byId('bridge').textContent = 'El host rechazó la conexión'; return; }
+    initialized = true;
+    byId('bridge').textContent = 'Conectado';
+    byId('messages').textContent = message.result?.hostCapabilities?.message ? 'Ofrecido; no probado' : 'No anunciado';
+    window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}}, '*');
+  }
+  if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
+});
+window.parent.postMessage({jsonrpc:'2.0',id:'tfo-connect-v1',method:'ui/initialize',params:{
+  protocolVersion:'2026-01-26', appInfo:{name:'tfo-connection',version:'1.0.0'}, appCapabilities:{}
+}}, '*');
+}
+</script></html>

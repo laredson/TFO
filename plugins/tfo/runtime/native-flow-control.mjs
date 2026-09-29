@@ -1,0 +1,14 @@
+import fs from "node:fs";
+import { createNativeFlow } from "./native-flow.mjs";
+import { nativeProjectHost } from "./project-host.mjs";
+const flow = createNativeFlow({ dataDir: process.env.TFO_DATA_DIR, host: nativeProjectHost });
+const args = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const op = process.argv[2];
+let result;
+if (op === "prepare") result = await flow.prepare(args);
+else if (op === "claim") result = await flow.claim(args.runId, args.nodeId);
+else if (op === "acknowledge") result = await flow.acknowledge(args.runId, args.nodeId, args.threadId);
+else if (["status", "observe"].includes(op)) result = await flow[op](args.runId);
+else if (op === "fail") result = flow.fail(args.runId, args.reason);
+else throw new Error("Unsupported native flow operation");
+process.stdout.write(JSON.stringify(result));

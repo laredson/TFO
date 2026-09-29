@@ -1,0 +1,66 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TFO · Ruta web</title><style>
+body{font:15px system-ui,sans-serif;padding:20px;margin:0;color:var(--color-text-primary,#202124);background:var(--color-background-primary,#fff)}h1{font-size:21px}h2{font-size:17px}.notice{border:1px solid #bb9751;border-radius:8px;padding:12px;line-height:1.5}li{padding:12px 0;border-bottom:1px solid #aaa}pre{white-space:pre-wrap;font:inherit}button{font:inherit;padding:8px 14px;margin-right:8px}#error{color:#b32121}
+</style><h1>Ruta de TFO</h1>
+<p id="objective">Esperando la ruta guardada.</p><p class="notice" id="status">Este panel no envía prompts. La conexión web aún necesita un adaptador que observe y controle los turnos.</p>
+<p id="target"></p><p id="receipt"></p><ol id="steps"></ol>
+<button id="refresh" disabled>Actualizar</button><button id="cancel" disabled>Cancelar ruta</button><p id="error" role="status"></p>
+<script>
+const el = id => document.getElementById(id);
+let current, connected = false, seq = 0;
+const waiting = new Map();
+function request(method, params) {
+  const id = `tfo-web-${++seq}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { waiting.delete(id); reject(new Error('El host no confirmó la petición. No se ha repetido automáticamente.')); }, 10000);
+    waiting.set(id, {resolve,reject,timer});
+    window.parent.postMessage({jsonrpc:'2.0',id,method,params}, '*');
+  });
+}
+function render(data) {
+  if (data?.kind !== 'web_prompt_queue') return;
+  current = data;
+  el('objective').textContent = data.objective;
+  el('target').textContent = `${data.projectLabel} · ${data.chatUrl} · destino declarado, sin verificar`;
+  el('receipt').textContent = `Envíos confirmados: ${data.confirmedSends}. Checkpoints verificados: ${data.checkpoints.length}.`;
+  el('status').textContent = data.status === 'cancelled' ? 'Ruta cancelada. Se conservan los prompts.' : 'Prompts guardados. Esperando el adaptador de Chat web; el envío automático no está habilitado.';
+  el('steps').replaceChildren();
+  for (const step of data.steps) {
+    const item = document.createElement('li'), title = document.createElement('h2'), selection = document.createElement('p'), prompt = document.createElement('pre');
+    title.textContent = step.title;
+    selection.textContent = `Solicitado: ${step.selection.modelLabel} · ${step.selection.effortLabel}`;
+    prompt.textContent = step.prompt;
+    item.append(title,selection,prompt); el('steps').append(item);
+  }
+  el('refresh').disabled = !connected;
+  el('cancel').disabled = !connected || data.status === 'cancelled';
+}
+async function call(name) {
+  if (!current || !connected) return;
+  el('error').textContent = '';
+  el('refresh').disabled = el('cancel').disabled = true;
+  try {
+    const result = await request('tools/call', {name,arguments:{runId:current.id}});
+    if (result?.isError) throw new Error(result.content?.find(item=>item.type==='text')?.text || 'La operación no se confirmó');
+    render(result.structuredContent);
+  } catch (error) { el('error').textContent = error.message; }
+  finally { el('refresh').disabled = false; el('cancel').disabled = current.status === 'cancelled'; }
+}
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data?.jsonrpc !== '2.0') return;
+  const message = event.data;
+  if (waiting.has(message.id)) {
+    const pending = waiting.get(message.id); clearTimeout(pending.timer); waiting.delete(message.id);
+    if (message.error) pending.reject(new Error(message.error.message || 'Error del host')); else pending.resolve(message.result);
+  }
+  if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
+});
+el('refresh').onclick = () => call('tfo_web_status');
+el('cancel').onclick = () => call('tfo_web_cancel');
+if (window.parent === window) el('status').textContent = 'Vista fuera del chat. Abre este panel mediante tfo_web_panel para cargar una ruta.';
+else request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'tfo-web-queue',version:'1.0.0'},appCapabilities:{}}).then(()=>{
+  connected = true;
+  window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*');
+  if (current) render(current);
+}).catch(error=>{el('error').textContent=error.message;});
+</script></html>

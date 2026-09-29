@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["success", "needs_ai", "summary", "details", "files_changed", "validation", "next_hint"],
+  "properties": {
+    "success": { "type": "boolean" },
+    "needs_ai": { "type": "boolean" },
+    "summary": { "type": "string" },
+    "details": { "type": "string" },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "validation": { "type": "array", "items": { "type": "string" } },
+    "next_hint": { "type": "string" }
+  }
+}

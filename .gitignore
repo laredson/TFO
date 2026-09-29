@@ -1,0 +1,7 @@
+node_modules/
+.tfo/
+.validation/
+dist/
+*.log
+.env
+.env.*

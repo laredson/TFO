@@ -1,0 +1,20 @@
+{
+  "name": "tfo-local",
+  "interface": {
+    "displayName": "Tfo Local"
+  },
+  "plugins": [
+    {
+      "name": "tfo",
+      "source": {
+        "source": "local",
+        "path": "./plugins/tfo"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
