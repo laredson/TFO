@@ -3,13 +3,27 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { estimateRouteBudget } from "../budget.mjs";
+import { estimateRouteBudget, equivalentUsd } from "../budget.mjs";
 import { createChatRouter } from "../chat-route.mjs";
 import { createSettingsStore } from "../settings.mjs";
 
 const luna = { model: "gpt-6-luna", reasoning: "medium" };
 const sol = { model: "gpt-6-sol", reasoning: "medium" };
 const steps = Array.from({ length: 3 }, (_, index) => ({ id: `step-${index + 1}`, title: `Paso ${index + 1}`, prompt: "Verifica una línea del archivo.", assessment: { complexity: "routine", confidence: "high", reason: "Edición sencilla", recommendation: luna }, expectedOutputTokens: 300 }));
+
+test("Sol 6.1 budgets use its cached price and default baseline, preserving explicit Sol 6", () => {
+  const next = { ...sol, model: "gpt-6.1-sol" };
+  const usage = { inputTokens: 1_000_000, cachedInputTokens: 1_000_000, outputTokens: 0 };
+  assert.equal(equivalentUsd(next, usage), 0.1);
+  assert.equal(equivalentUsd(sol, usage), 0.2);
+  assert.equal(equivalentUsd(next, { inputTokens: 1_000_000, outputTokens: 1_000_000 }), 12);
+  assert.equal(equivalentUsd(next, { inputTokens: 1_000_000, cacheWriteInputTokens: 1_000_000 }), 2.5);
+  const automatic = estimateRouteBudget({ objective: "Test", steps: [{ prompt: "Edit" }], initialSelection: sol });
+  assert.equal(automatic.baselineSelection.model, next.model);
+  assert.deepEqual(automatic.estimates[0].selection, next);
+  const explicit = estimateRouteBudget({ objective: "Test", steps: [{ prompt: "Edit", assessment: { recommendation: sol } }], initialSelection: next });
+  assert.deepEqual(explicit.estimates[0].selection, sol);
+});
 
 test("division accounts for repeated context and rejects a split above the cost ceiling", () => {
   const estimate = estimateRouteBudget({ objective: "Editar una nota", steps, initialSelection: sol, contextTokens: 80000, maxCostMultiplier: 1 });
@@ -35,7 +49,7 @@ test("weekly limit stops a budgeted chat before dispatch and leaves legacy route
 test("estimates carry growing history and do not treat uncertain recommendations as savings", () => {
   const uncertain = steps.map(step => ({ ...step, assessment: { ...step.assessment, confidence: "low" } }));
   const budget = estimateRouteBudget({ objective: "Test", steps: uncertain, initialSelection: sol });
-  assert.equal(budget.estimates[0].selection.model, sol.model);
+  assert.equal(budget.estimates[0].selection.model, "gpt-6.1-sol");
   assert.ok(budget.estimates[2].tokens.inputTokens >= budget.estimates[0].tokens.inputTokens + 600);
   assert.equal(budget.confidence, "low"); assert.equal(budget.latencyEstimate, null);
 });

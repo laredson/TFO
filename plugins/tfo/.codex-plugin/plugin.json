@@ -1,6 +1,6 @@
 {
   "name": "tfo",
-  "version": "1.0.0-rc.1+codex.20260929061414",
+  "version": "1.0.0-rc.2+codex.sol61",
   "description": "TaskFlow Orchestrator for supervised local Codex chat flows, dependencies, queues, and verified results.",
   "author": {
     "name": "Wice Games / local development"

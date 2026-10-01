@@ -1,11 +1,12 @@
 # TFO · TaskFlow Orchestrator
 
-**1.0.0-rc.1 — candidato para Windows y Codex local.** La publicación estable queda pendiente de la prueba de aceptación del usuario.
+**1.0.0-rc.2 — candidato para Windows y Codex local.** La publicación estable queda pendiente de la prueba de aceptación del usuario.
 
 TFO coordina tareas, dependencias y resultados de chats. La IA estima dificultad y riesgo y propone un modelo y esfuerzo adecuados dentro de los límites del usuario. Esta regla incluye creación, continuaciones e integración en el principal. TFO registra la decisión y verifica la selección que ejecutó el host.
 
 ## Comportamiento
 
+- GPT-6.1 Sol es el Sol predeterminado en planes nuevos. GPT-6 Sol queda disponible por petición explícita del usuario; se conservan los modelos exactos de recibos y planes ya aprobados.
 - Cadenas supervisadas con selección por tarea mediante herramientas nativas de Codex. Las continuaciones de trabajadores necesitan un llamador IA activo.
 - Retorno independiente al principal: espera a los trabajadores y al cierre del turno de origen antes de enviar una vez.
 - El retorno con otra selección usa el adaptador de la interfaz de Codex: exige el chat correcto visible y el editor vacío, aplica modelo/esfuerzo y comprueba el recibo. Si no puede verificarlo, se detiene para revisión. La cola nativa solo sirve cuando la selección prevista coincide.
@@ -14,7 +15,7 @@ TFO coordina tareas, dependencias y resultados de chats. La IA estima dificultad
 
 ## Instalar y probar
 
-Consulta [INSTALL.md](INSTALL.md). El paquete local conserva el formato de hooks de Codex; el portable se genera por separado para preparar la futura distribución como complemento. No se ha publicado una versión estable ni un complemento público.
+Consulta [INSTALL.md](INSTALL.md). Descarga los paquetes local y portable en la [release 1.0.0-rc.2](https://github.com/laredson/TFO/releases/tag/v1.0.0-rc.2). El paquete local conserva el formato de hooks de Codex; el portable se genera por separado para preparar la futura distribución como complemento. La release de GitHub es preliminar; la publicación estable y en el directorio de complementos sigue pendiente.
 
 Consulta la [guía](docs/USER_GUIDE.md), la [coordinación](docs/PARALLEL_CODEX.md), las [notas del RC](docs/RELEASE_NOTES.md) y los [criterios de aceptación](docs/RELEASE_READINESS.md).
 

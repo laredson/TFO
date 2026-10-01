@@ -114,6 +114,26 @@ test("FIFO stores all prompts, waits for actual completion, and advances medium/
   assert.deepEqual(f.sent.map(x=>x.requested.reasoning),["medium","low","medium"]);
   assert.ok(f.sent.every(x=>x.thread===threadId));
 });
+test("Sol 6.1 queues verify exact receipts before advancing and never accept Sol 6", async t => {
+  for (const observedModel of ["gpt-6.1-sol", "gpt-6-sol"]) {
+    const f = fixture(t);
+    f.args.initialSelection.model = "gpt-6.1-sol";
+    for (const step of f.args.steps) step.selection.model = "gpt-6.1-sol";
+    const started = await f.queue.start(f.args);
+    f.finishSource(); await f.queue.tick(started.id);
+    assert.equal(f.sent[0].requested.model, "gpt-6.1-sol");
+    f.finish("1", { model: observedModel });
+    const state = await f.queue.tick(started.id);
+    if (observedModel === "gpt-6-sol") {
+      assert.equal(state.status, "needs_review");
+      await f.queue.tick(started.id);
+      assert.equal(f.sent.length, 1);
+    } else {
+      assert.equal(state.completedSteps.length, 1);
+      assert.equal(f.sent.length, 2);
+    }
+  }
+});
 
 test("wrong response, wrong model, interrupted turn and injected user input each stop the remaining queue", async t => {
   for (const scenario of ["reply", "selection", "interrupt", "injection", "other-turn"]) {

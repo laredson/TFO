@@ -29,6 +29,15 @@ test("copies validated settings and archives literal prompts without activation"
   assert.equal(fs.readFileSync(path.join(f.target, "migration-archive", "legacy-data", "runs", "done", "state.json"), "utf8"), fs.readFileSync(path.join(f.source, "runs", "done", "state.json"), "utf8"));
   assert.equal(fs.existsSync(path.join(f.target, "runs")), false);
 });
+test("preserves exact approved Sol 6.1 and legacy Sol ceilings when importing settings", () => {
+  for (const model of ["gpt-6.1-sol", "gpt-6-sol"]) {
+    const approved = { ...settings, allowUpgrades: true, upgradeAcceptedAt: "2026-09-30T00:00:00Z",
+      upgradeCeiling: { model, reasoning: "ultra" } };
+    const f = fixture(model, ({ source }) => fs.writeFileSync(path.join(source, "settings.json"), JSON.stringify(approved)));
+    run(f);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.target, "settings.json"))), approved);
+  }
+});
 test("rejects active or uncertain work and leaves target absent", () => {
   for (const [name, mutate] of [
     ["active", ({ source }) => fs.writeFileSync(path.join(source, "runs", "done", "state.json"), JSON.stringify({ status: "paused" }))],

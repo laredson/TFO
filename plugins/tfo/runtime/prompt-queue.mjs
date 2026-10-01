@@ -122,7 +122,7 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
     });
     const maxTurnMinutes = args.maxTurnMinutes ?? 60;
     if (!Number.isInteger(maxTurnMinutes) || maxTurnMinutes < 1 || maxTurnMinutes > 1440) throw new Error("maxTurnMinutes must be between 1 and 1440");
-    const state = { id, kind: "prompt_queue", surface: "codex", version: "1.0.0-rc.1", objective: args.objective, projectPath,
+    const state = { id, kind: "prompt_queue", surface: "codex", version: "1.0.0-rc.2", objective: args.objective, projectPath,
       threadId: args.threadId, steps, currentIndex: 0, status: args.startPaused === true ? "paused" : "pending",
       resumeStatus: args.startPaused === true ? "pending" : null, pendingSourceTurnId: host.lastTurnId,
       pendingSourceUserMessageCount: host.userMessageCount ?? null,

@@ -70,7 +70,7 @@ function Find-Selector($items) {
   $matchingControls = @()
   foreach ($item in $items) {
     if ($item.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and
-        $item.Current.Name -match '^GPT-(6|5\.6|5\.5) ' -and $item.Current.BoundingRectangle.Width -gt 0) { $matchingControls += $item }
+        $item.Current.Name -match '^GPT-(6\.1|6|5\.6|5\.5) ' -and $item.Current.BoundingRectangle.Width -gt 0) { $matchingControls += $item }
   }
   if ($matchingControls.Count -ne 1) { throw "Expected one model selector, found $($matchingControls.Count)" }
   return $matchingControls[0]
@@ -284,7 +284,7 @@ function Assert-RoutePendingDispatch {
 }
 Assert-RoutePendingDispatch
 $script:tfoPhase = 'selecting'
-$models = @{ 'gpt-6-sol' = 'GPT-6 Sol'; 'gpt-6-astra' = 'GPT-6 Astra'; 'gpt-6-luna' = 'GPT-6 Luna';
+$models = @{ 'gpt-6.1-sol' = 'GPT-6.1 Sol'; 'gpt-6-sol' = 'GPT-6 Sol'; 'gpt-6-astra' = 'GPT-6 Astra'; 'gpt-6-luna' = 'GPT-6 Luna';
   'gpt-5.6-sol' = 'GPT-5.6 Sol'; 'gpt-5.6-luna' = 'GPT-5.6 Luna' }
 $efforts = @{ low = 1; medium = 2; high = 3; xhigh = 4; max = 5; ultra = 6 }
 if (-not $models.ContainsKey($request.model) -or -not $efforts.ContainsKey($request.reasoning)) { throw 'Selection is not exposed by the accessible model picker' }

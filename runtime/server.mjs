@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createChatRouter } from "./chat-route.mjs";
 import { createPromptQueue } from "./prompt-queue.mjs";
 import { launchSupervisor } from "./supervisor-launch.mjs";
-import { MODELS as MODEL_REGISTRY, EFFORTS as VALID_EFFORTS, validateSelection, decideModel, selectionSchema, assessmentSchema } from "./model-policy.mjs";
+import { DEFAULT_SOL_MODEL, MODELS as MODEL_REGISTRY, EFFORTS as VALID_EFFORTS, validateSelection, decideModel, selectionSchema, assessmentSchema } from "./model-policy.mjs";
 import { createSettingsStore } from "./settings.mjs";
 import { dispatchPrompt, diagnoseDesktopAccess } from "./queue-transport.mjs";
 import { launchOptions } from "./options-server.mjs";
@@ -25,7 +25,7 @@ import { projectFlowTools } from "./project-flow-tools.mjs";
 import { createNativeFlow } from "./native-flow.mjs";
 import { nativeFlowTools } from "./native-flow-tools.mjs";
 
-const VERSION = "1.0.0-rc.1";
+const VERSION = "1.0.0-rc.2";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(process.env.TFO_DATA_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), "TFO", "data"));
 const RUNS_DIR = path.join(DATA_DIR, "runs");
@@ -374,7 +374,7 @@ async function callTool(name, args = {}) {
     case "tfo_queue_pause": return promptQueue.pause(args.runId);
     case "tfo_queue_cancel": return promptQueue.cancel(args.runId);
     case "tfo_queue_resume": return promptQueue.resume(args.runId);
-    case "tfo_settings": return { ...settings.read(), models: MODEL_REGISTRY, efforts: VALID_EFFORTS };
+    case "tfo_settings": return { ...settings.read(), defaultSolModel: DEFAULT_SOL_MODEL, models: MODEL_REGISTRY, efforts: VALID_EFFORTS };
     case "tfo_options": return launchOptions(DATA_DIR);
     case "tfo_start": return publicState(startRoute(args));
     case "tfo_get_status": {

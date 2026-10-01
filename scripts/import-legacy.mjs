@@ -19,7 +19,7 @@ function validateSettings(raw) {
   if (!["economy", "hybrid"].includes(raw.profile) || typeof raw.economyEnabled !== "boolean" || typeof raw.allowUpgrades !== "boolean") fail("invalid settings profile");
   if (raw.allowUpgrades && (!raw.upgradeAcceptedAt || !raw.upgradeCeiling)) fail("upgrade authorization is incomplete");
   if (raw.upgradeCeiling !== null && raw.upgradeCeiling !== undefined) {
-    const limits = { "gpt-6-luna": "max", "gpt-6-sol": "ultra", "gpt-6-astra": "ultra", "gpt-5.6-luna": "max", "gpt-5.6-terra": "ultra", "gpt-5.6-sol": "ultra", "gpt-5.5": "xhigh" };
+    const limits = { "gpt-6-luna": "max", "gpt-6.1-sol": "ultra", "gpt-6-sol": "ultra", "gpt-6-astra": "ultra", "gpt-5.6-luna": "max", "gpt-5.6-terra": "ultra", "gpt-5.6-sol": "ultra", "gpt-5.5": "xhigh" };
     const efforts = ["low", "medium", "high", "xhigh", "max", "ultra"];
     const limit = limits[raw.upgradeCeiling?.model];
     if (!limit || efforts.indexOf(raw.upgradeCeiling?.reasoning) < 0 || efforts.indexOf(raw.upgradeCeiling.reasoning) > efforts.indexOf(limit) || Object.keys(raw.upgradeCeiling).some(key => !["model", "reasoning"].includes(key))) fail("invalid upgrade ceiling");

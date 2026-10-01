@@ -19,6 +19,12 @@ if (Test-RequestedSelection 'GPT-6 Luna Ligero' 'GPT-6 Astra' 'low') {throw 'Wro
 $item = [pscustomobject]@{Current=[pscustomobject]@{Name='GPT-6 Astra Ligero';ControlType=[System.Windows.Automation.ControlType]::Button;BoundingRectangle=[pscustomobject]@{Width=200}}}
 $found = Find-Selector @($item)
 if ($found.Current.Name -ne 'GPT-6 Astra Ligero') {throw 'Wrong selector'}
+foreach ($label in @('GPT-6.1 Sol Medio', 'GPT-6 Sol Medio')) {
+  $item.Current.Name = $label
+  if ((Find-Selector @($item)).Current.Name -ne $label) {throw 'Sol selector not recognized'}
+}
+if (-not (Test-RequestedSelection 'GPT-6.1 Sol Medio' 'GPT-6.1 Sol' 'medium')) {throw 'Sol 6.1 rejected'}
+if (Test-RequestedSelection 'GPT-6 Sol Medio' 'GPT-6.1 Sol' 'medium') {throw 'Old Sol accepted as 6.1'}
 $rejected = $false
 try { Find-Selector @($item,$item) | Out-Null } catch { if ($_.Exception.Message -match 'found 2') {$rejected=$true} else {throw} }
 if (-not $rejected) {throw 'Ambiguous selectors accepted'}

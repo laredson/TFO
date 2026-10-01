@@ -206,7 +206,7 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
     if (deferDispatch && !sourceTurn?.lastTurnId) throw new Error("Cannot identify the current host turn; no route was started.");
     const state = {
       id: `chat_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`,
-      kind: "chat", version: "1.0.0-rc.1", objective, projectPath, budget,
+      kind: "chat", version: "1.0.0-rc.2", objective, projectPath, budget,
       time: args.enforceBudget ? { mode: options.timeMode, targetMinutes: options.targetMinutes, extraMinutes: options.extraMinutes,
         elapsedMinutes: 0, progressPercent: 0, approximate: true } : null,
       execution: { current: initial, ceiling: initial }, modelDecisions: [],

@@ -1,4 +1,4 @@
-# Instalar TFO 1.0.0-rc.1
+# Instalar TFO 1.0.0-rc.2
 
 Este archivo acompaña al candidato local para Windows/Codex. Extrae el ZIP completo en una carpeta estable llamada TFO. Conserva la estructura, incluida .agents/plugins/marketplace.json.
 
@@ -28,4 +28,4 @@ Conserva el paquete anterior y sus datos hasta completar una prueba en vivo. Si 
 
 ## Paquete portable
 
-El archivo tfo-1.0.0-rc.1-portable.zip contiene una sola carpeta tfo con plugin.json y mcp.json portables. Está preparado para la futura carga en complementos. Usa el archivo local para la instalación en Codex: el formato portable cambia el descubrimiento de hooks en el host local actual. No implica compatibilidad de orquestación con ChatGPT Projects.
+El archivo tfo-1.0.0-rc.2-portable.zip contiene una sola carpeta tfo con plugin.json y mcp.json portables. Está preparado para la futura carga en complementos. Usa el archivo local para la instalación en Codex: el formato portable cambia el descubrimiento de hooks en el host local actual. No implica compatibilidad de orquestación con ChatGPT Projects.

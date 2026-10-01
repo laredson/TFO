@@ -1,4 +1,4 @@
-# TFO 1.0.0-rc.1 local package
+# TFO 1.0.0-rc.2 local package
 
 The new package identity is `tfo`, with a separate `tfo-local` catalogue. Its local manifest is `plugins/tfo/.codex-plugin/plugin.json`. `plugin.portable.json` is an export only; do not create a root `plugin.json` for the local install, because that format suppresses the Stop hook on this host.
 

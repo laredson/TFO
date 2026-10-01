@@ -10,7 +10,7 @@ test("local and portable identities agree without a root manifest", () => {
   const local = read("plugins/tfo/.codex-plugin/plugin.json");
   const portable = read("plugins/tfo/plugin.portable.json");
   assert.equal(local.name, "tfo");
-  assert.equal(local.version.split("+")[0], "1.0.0-rc.1");
+  assert.equal(local.version.split("+")[0], "1.0.0-rc.2");
   assert.equal(portable.name, local.name);
   assert.equal(portable.version, local.version);
   assert.deepEqual(portable.extensions["com.openai"].interface.defaultPrompt, local.interface.defaultPrompt);

@@ -1,9 +1,10 @@
-import { validateSelection } from "./model-policy.mjs";
+import { DEFAULT_SOL_MODEL, preferredSelection, validateSelection } from "./model-policy.mjs";
 
 // Standard, short-context API-equivalent USD per million tokens (2026-09-29).
 // These prices do not describe Codex subscription quota consumption.
 export const PRICES = Object.freeze({
   "gpt-6-luna": { input: 0.10, cached: 0.01, cacheWrite: 0.125, output: 0.50 },
+  "gpt-6.1-sol": { input: 2.00, cached: 0.10, cacheWrite: 2.50, output: 10.00 },
   "gpt-6-sol": { input: 2.00, cached: 0.20, cacheWrite: 2.50, output: 10.00 },
   "gpt-6-astra": { input: 10.00, cached: 1.00, cacheWrite: 12.50, output: 50.00 },
 });
@@ -28,12 +29,13 @@ export function estimateRouteBudget({ objective, constraints = "", steps, initia
   if (!Array.isArray(steps) || !steps.length) throw new Error("Steps are needed for a budget estimate");
   const baseInput = Math.max(0, Math.floor(contextTokens));
   const output = steps.reduce((sum, step) => sum + (step.expectedOutputTokens || 2048), 0);
-  const baseline = equivalentUsd({ model: "gpt-6-sol", reasoning: "high" }, {
+  const baselineSelection = { model: DEFAULT_SOL_MODEL, reasoning: "high" };
+  const baseline = equivalentUsd(baselineSelection, {
     inputTokens: baseInput + roughTokens(objective + constraints + steps.map(step => step.prompt).join("\n")), outputTokens: output,
   });
   let projected = 0, historyTokens = 0;
   const estimates = steps.map((step, index) => {
-    const selection = step.assessment?.confidence === "low" ? initialSelection : step.assessment?.recommendation || initialSelection;
+    const selection = step.assessment?.confidence === "low" ? preferredSelection(initialSelection) : step.assessment?.recommendation || preferredSelection(initialSelection);
     const input = baseInput + roughTokens(objective + constraints + step.prompt) + 400 + historyTokens;
     const tokens = { inputTokens: input, outputTokens: step.expectedOutputTokens || 2048 };
     historyTokens += roughTokens(step.prompt) + tokens.outputTokens;
@@ -43,9 +45,9 @@ export function estimateRouteBudget({ objective, constraints = "", steps, initia
   });
   if (!Number.isFinite(maxCostMultiplier) || maxCostMultiplier < 1 || maxCostMultiplier > 20) throw new Error("Invalid cost multiplier");
   const ceiling = Math.min(baseline * maxCostMultiplier, maxEstimatedUsd);
-  return { priceBasis: "OpenAI API standard short-context, verified 2026-09-29", baselineUsd: baseline,
+  return { priceBasis: "OpenAI API standard short-context, verified 2026-09-29", baselineSelection, baselineUsd: baseline,
     estimateKind: "uncalibrated_heuristic", confidence: "low", latencyEstimate: null,
-    assumptions: ["Baseline is one hypothetical Sol turn, not measured savings.",
+    assumptions: ["Baseline is one hypothetical GPT-6.1 Sol turn, not measured savings.",
       "No cache discount; prior planned prompts and outputs are repeated in later turns.",
       "Expected output must include reasoning tokens; effort is not a calibrated multiplier.",
       "Tool calls, hidden context growth, retries and long-context pricing are not predicted.",

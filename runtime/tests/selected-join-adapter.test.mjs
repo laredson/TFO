@@ -92,6 +92,22 @@ test("selected adapter sends once and confirms exact prompt and selected turn", 
   assert.equal(result.selectionConfirmed, true);
   assert.deepEqual(f.calls, ["guard", "guard", "probe", "guard", "probe", "guard", "send"]);
 });
+test("selected main return accepts Sol 6.1 and rejects an old Sol host receipt", async () => {
+  for (const observedModel of ["gpt-6.1-sol", "gpt-6-sol"]) {
+    let attempts = 0;
+    const f = adapterFixture({
+      readTurn: async () => ({ lastTurnId: "new-turn", selectionTurnId: "new-turn", model: observedModel, reasoning: "medium" }),
+      ui: async mode => {
+        if (mode === "send") { attempts++; return { status: "attempted", selector: "GPT-6.1 Sol Medio" }; }
+        return { status: "ready", selector: "GPT-6 Astra Alto", editorEmpty: true, layout };
+      },
+    });
+    f.args.requestedSelection = { model: "gpt-6.1-sol", reasoning: "medium" };
+    if (observedModel === "gpt-6.1-sol") assert.equal((await f.adapter.send(f.args)).selectionConfirmed, true);
+    else await assert.rejects(f.adapter.send(f.args), /model|selection|expected/);
+    assert.equal(attempts, 1);
+  }
+});
 
 test("missing source marker, wrong visible chat and changed host selection send nothing", async () => {
   const missing = adapterFixture({ readReceipt: async () => ({ completed: true, finalResponse: "No marker" }) });

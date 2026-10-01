@@ -58,6 +58,27 @@ test("worker concurrency limit and uncertain delivery never permit duplicate att
   await assert.rejects(f.flow.claim(id, "a1"), /never retry/);
   f.flow.fail(id, "Uncertain native delivery"); await assert.rejects(f.flow.claim(id, "b1"), /not available/);
 });
+test("native Sol 6.1 tasks dispatch exact IDs and reject old Sol receipts", async t => {
+  for (const observedModel of ["gpt-6.1-sol", "gpt-6-sol"]) {
+    const f = fixture(t);
+    f.args.nodes.find(node => node.id === "b1").selection.model = "gpt-6.1-sol";
+    const id = (await f.flow.prepare(f.args)).id;
+    const action = await f.flow.claim(id, "b1");
+    assert.equal(action.args.model, "gpt-6.1-sol");
+    await f.flow.acknowledge(id, "b1", b);
+    f.finish(b, action, { model: observedModel });
+    const state = await f.flow.observe(id);
+    if (observedModel === "gpt-6-sol") {
+      assert.equal(state.status, "needs_review");
+      await assert.rejects(f.flow.claim(id, "b2"), /not available/);
+    } else {
+      assert.equal(state.nodes.find(node => node.id === "b1").status, "completed");
+      assert.ok(state.nodes.find(node => node.id === "b1").checkpoint.apiEquivalentUsd > 0);
+      const explicitOldSol = await f.flow.claim(id, "b2");
+      assert.equal(explicitOldSol.args.model, "gpt-6-sol");
+    }
+  }
+});
 test("wrong observed model prevents successors even when the requested selection was correct", async t => {
   const f = fixture(t), id = (await f.flow.prepare(f.args)).id, action = await f.flow.claim(id, "a1");
   await f.flow.acknowledge(id, "a1", a); f.finish(a, action, { model: "gpt-6-sol" });

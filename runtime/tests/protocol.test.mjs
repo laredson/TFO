@@ -10,6 +10,26 @@ import { fileURLToPath } from "node:url";
 
 const runtime = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+test("MCP advertises Sol 6.1 in every selection enum and marks Sol 6 explicit-only", async t => {
+  const client = await createClient(t);
+  const listed = await client.call("tools/list");
+  let selections = 0;
+  function inspect(schema) {
+    if (!schema || typeof schema !== "object") return;
+    if (schema.enum?.includes("gpt-6-sol")) {
+      assert.ok(schema.enum.includes("gpt-6.1-sol")); selections++;
+    }
+    for (const child of Object.values(schema)) inspect(child);
+  }
+  for (const tool of listed.result.tools) inspect(tool.inputSchema);
+  assert.ok(selections >= 5);
+  const result = await client.call("tools/call", { name: "tfo_settings", arguments: {} });
+  const settings = JSON.parse(result.result.content[0].text);
+  assert.equal(settings.defaultSolModel, "gpt-6.1-sol");
+  assert.equal(settings.models["gpt-6-sol"].explicitOnly, true);
+  assert.equal(settings.models["gpt-6-sol"].replacement, "gpt-6.1-sol");
+});
+
 async function createClient(t, extraEnv = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-test-"));
   const child = spawn(process.execPath, [path.join(runtime, "server.mjs")], {

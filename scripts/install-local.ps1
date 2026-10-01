@@ -10,7 +10,7 @@ $saved = @()
 if (-not (Test-Path -LiteralPath $marketplace -PathType Leaf)) { throw 'TFO marketplace is missing' }
 if (-not (Test-Path -LiteralPath (Join-Path $plugin '.codex-plugin/plugin.json') -PathType Leaf)) { throw 'TFO manifest is missing' }
 $manifest = Get-Content -Encoding UTF8 -LiteralPath (Join-Path $plugin '.codex-plugin/plugin.json') -Raw | ConvertFrom-Json
-if ($manifest.name -ne 'tfo' -or $manifest.version -notmatch '^1\.0\.0-rc\.1(?:\+.*)?$') { throw 'Unexpected TFO package identity' }
+if ($manifest.name -ne 'tfo' -or $manifest.version -notmatch '^1\.0\.0-rc\.2(?:\+.*)?$') { throw 'Unexpected TFO package identity' }
 foreach ($entry in @(Get-ChildItem -LiteralPath $cacheRoot -Directory -ErrorAction SilentlyContinue)) {
   $resolved = [IO.Path]::GetFullPath($entry.FullName)
   if (-not $resolved.StartsWith($cacheRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected TFO cache path' }

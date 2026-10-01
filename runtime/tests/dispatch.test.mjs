@@ -1,10 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createPromptDispatcher, uiBridgeFailure, waitForUiReady } from "../queue-transport.mjs";
+import { createPromptDispatcher, selectorMatchesSelection, uiBridgeFailure, waitForUiReady } from "../queue-transport.mjs";
 const source = "11111111-1111-1111-1111-111111111111";
 const target = "22222222-2222-2222-2222-222222222222";
 const layout = {window:[0,0,1200,900],marker:[400,600,200,30],editor:[300,700,800,100],selector:[800,850,150,30]};
 const current = { model: "gpt-6-luna", reasoning: "medium" };
+
+test("Sol 6.1 picker labels never match old Sol or a different effort", () => {
+  const sol = { model: "gpt-6.1-sol", reasoning: "medium" };
+  assert.equal(selectorMatchesSelection("GPT-6.1 Sol Medio", sol), true);
+  assert.equal(selectorMatchesSelection("GPT-6.1 Sol Medium", sol), true);
+  assert.equal(selectorMatchesSelection("GPT-6 Sol Medio", sol), false);
+  assert.equal(selectorMatchesSelection("GPT-6.1 Sol Alto", sol), false);
+  assert.equal(selectorMatchesSelection("GPT-6.1 Sol Medio", { ...sol, model: "gpt-6-sol" }), false);
+});
 test("bridge errors distinguish an unsent draft from an attempted or unknown send", () => {
   const report = {phase:"waiting_for_composer",textEntryAttempted:true,sendAttempted:false,error:"Composer did not confirm"};
   const before = uiBridgeFailure(`TFO_UI_FAILURE:${JSON.stringify(report)}\n`,1);

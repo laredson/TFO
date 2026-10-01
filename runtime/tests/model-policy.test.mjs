@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { decideModel, MODELS, EFFORTS, validateSelection } from "../model-policy.mjs";
+import { decideModel, MODELS, EFFORTS, validateSelection, preferredSelection, assertQueueSelection } from "../model-policy.mjs";
 import { createSettingsStore, UPGRADE_WARNING } from "../settings.mjs";
 import { turnStartParams, queueArguments, dispatchPrompt } from "../queue-transport.mjs";
 const ceiling = { model: "gpt-6-astra", reasoning: "xhigh" };
@@ -23,7 +23,7 @@ test("turning savings off preserves the reached level and never restores a highe
 test("every supported selection obeys both downward bounds, including crossed model/effort requests", () => {
   const selections = Object.entries(MODELS).flatMap(([model, spec]) => EFFORTS.slice(0, EFFORTS.indexOf(spec.maxEffort) + 1).map(reasoning => ({ model, reasoning })));
   for (const current of selections) for (const recommendation of selections) {
-    const cap = { model: current.model.startsWith("gpt-6-") ? "gpt-6-astra" : current.model.startsWith("gpt-5.6-") ? "gpt-5.6-sol" : "gpt-5.5", reasoning: current.model === "gpt-5.5" ? "xhigh" : "ultra" };
+    const cap = { model: MODELS[current.model].family === "6" ? "gpt-6-astra" : current.model.startsWith("gpt-5.6-") ? "gpt-5.6-sol" : "gpt-5.5", reasoning: current.model === "gpt-5.5" ? "xhigh" : "ultra" };
     try {
       const decision = decideModel({ current, ceiling: cap, settings, assessment: { ...assessment, recommendation } });
       assert.equal(MODELS[decision.selected.model].family, MODELS[current.model].family);
@@ -31,6 +31,36 @@ test("every supported selection obeys both downward bounds, including crossed mo
       assert.ok(EFFORTS.indexOf(decision.selected.reasoning) <= EFFORTS.indexOf(current.reasoning));
     } catch (error) { assert.match(error.message, /blocked|ceiling|generation/); }
   }
+});
+test("automatic Sol choices use 6.1 while exact validation and explicit old Sol stay pinned", () => {
+  const oldSol = { model: "gpt-6-sol", reasoning: "medium" };
+  const sol = { ...oldSol, model: "gpt-6.1-sol" };
+  assert.deepEqual(validateSelection(oldSol), oldSol);
+  assert.deepEqual(preferredSelection(oldSol), sol);
+  for (const economyEnabled of [true, false]) {
+    const options = { ...settings, economyEnabled };
+    const automatic = decideModel({ current: oldSol, ceiling: oldSol, settings: options });
+    assert.deepEqual(automatic.previous, oldSol);
+    assert.deepEqual(automatic.selected, sol);
+    assert.equal(automatic.changed, true);
+    assert.deepEqual(decideModel({ current: oldSol, ceiling, settings: options,
+      assessment: { ...assessment, recommendation: oldSol } }).selected, oldSol);
+  }
+  assert.deepEqual(decideModel({ current: sol, ceiling, settings,
+    assessment: { ...assessment, recommendation: oldSol } }).selected, oldSol);
+  assert.deepEqual(decideModel({ current: sol, ceiling: sol, settings, assessment }).selected, luna);
+});
+test("6.1 shares the Sol tier without bypassing effort, upgrade or generation limits", () => {
+  const sol = { model: "gpt-6.1-sol", reasoning: "medium" };
+  assert.doesNotThrow(() => assertQueueSelection(sol, { model: "gpt-6-sol", reasoning: "medium" }));
+  assert.doesNotThrow(() => assertQueueSelection(sol, ceiling));
+  assert.throws(() => assertQueueSelection({ ...sol, reasoning: "high" }, sol), /higher/);
+  assert.throws(() => assertQueueSelection(sol, luna), /higher/);
+  assert.throws(() => assertQueueSelection(sol, { model: "gpt-5.6-sol", reasoning: "medium" }, [sol]), /generation/);
+  assert.throws(() => decideModel({ current: luna, ceiling, settings,
+    assessment: { ...assessment, recommendation: sol } }), /blocked/);
+  assert.deepEqual(validateSelection({ ...sol, reasoning: "ultra" }), { ...sol, reasoning: "ultra" });
+  assert.throws(() => validateSelection({ ...sol, reasoning: "none" }), /Unsupported/);
 });
 test("upgrades require permission, remain below the initial ceiling and reject unsupported effort", () => {
   assert.throws(() => decideModel({ current: luna, ceiling, settings, assessment: { ...assessment, recommendation: ceiling } }), /blocked/);

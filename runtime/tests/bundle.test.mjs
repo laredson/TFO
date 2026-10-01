@@ -25,7 +25,7 @@ test("the installed bundle matches its source and starts after copying outside t
   fs.cpSync(source, path.join(dir, "plugin"), { recursive: true });
   const result = spawnSync(process.execPath, ["runtime/chat-control.mjs", "health"], { cwd: path.join(dir, "plugin"), encoding: "utf8", env: { ...process.env, TFO_DATA_DIR: path.join(dir, "data") }, timeout: 10000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).version, "1.0.0-rc.1");
+  assert.equal(JSON.parse(result.stdout).version, "1.0.0-rc.2");
   assert.equal(fs.existsSync(path.join(source, "plugin.json")), false, "root portable manifest suppresses the local hook loader");
   const portable = JSON.parse(fs.readFileSync(path.join(source, "plugin.portable.json"), "utf8"));
   const legacy = JSON.parse(fs.readFileSync(path.join(source, ".codex-plugin", "plugin.json"), "utf8"));

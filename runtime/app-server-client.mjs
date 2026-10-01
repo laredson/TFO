@@ -44,7 +44,7 @@ export async function openAppServer({ command = process.env.TFO_CODEX_COMMAND ||
   });
   const close = () => { closed = true; lines.close(); child.stdin.end(); child.kill(); };
   try {
-    await request("initialize", { clientInfo: { name: "tfo_orchestrator", title: "TFO", version: "1.0.0-rc.1" } });
+    await request("initialize", { clientInfo: { name: "tfo_orchestrator", title: "TFO", version: "1.0.0-rc.2" } });
     write({ method: "initialized", params: {} });
     return { request, close, onNotification: listener => { listeners.add(listener); return () => listeners.delete(listener); } };
   } catch (error) { close(); throw error; }

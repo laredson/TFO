@@ -1,4 +1,16 @@
-# TFO 1.0.0-rc.1
+# Notas de TFO
+
+## 1.0.0-rc.2 — Sol 6.1
+
+Sol 6.1 sustituye a Sol 6 en nuevas decisiones automáticas del nivel Sol. Sol 6 sigue disponible cuando el usuario lo pide explícitamente. Se conservan los IDs exactos de selecciones de origen, recibos y planes ya aprobados.
+
+- Compatibilidad con `gpt-6.1-sol` en catálogo, esquemas MCP, colas, selección nativa y selector de Windows. En híbrido medio, Luna medio cubre tareas acotadas y Sol 6.1 medio el trabajo de código con dependencias.
+- Detección del selector GPT-6.1 y verificación exacta: una respuesta de Sol 6 no satisface una petición de Sol 6.1. Selección incorrecta, intervención o envío incierto detienen dependencias y no provocan reintentos.
+- Sol 6.1 comparte el nivel Sol de la familia GPT-6 y los esfuerzos que ofrece Codex. Se conservan los límites autorizados por el usuario.
+- Precios API de referencia: $2 entrada, $0.10 entrada en caché, $2.50 escritura de caché y $10 salida por millón de tokens, según la [documentación oficial](https://developers.openai.com/api/docs/models/gpt-6.1-sol). No representan consumo de cuota Codex.
+- Paquetes local y portable, con sumas SHA-256. Suite de 160 pruebas automatizadas; las pruebas simuladas no certifican un cambio de modelo en la interfaz real. La aceptación en vivo continúa pendiente.
+
+## 1.0.0-rc.1
 
 Candidato para aceptación en Windows/Codex local, previo a la publicación estable.
 

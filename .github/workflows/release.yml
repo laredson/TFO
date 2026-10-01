@@ -1,0 +1,63 @@
+name: Build and publish TFO release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - plugins/tfo/.codex-plugin/plugin.json
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tfo-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'laredson/TFO'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build plugin
+        run: node scripts/build-plugin.mjs
+      - name: Validate runtime and package
+        run: node --test --test-concurrency=1 runtime/tests/*.test.mjs scripts/tests/*.test.mjs
+      - name: Build local and portable archives
+        run: python scripts/package-release.py
+      - name: Publish release and assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          $manifest = Get-Content plugins/tfo/.codex-plugin/plugin.json -Raw | ConvertFrom-Json
+          $version = $manifest.version.Split('+')[0]
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-rc\.\d+)?$') { throw 'Unexpected release version' }
+          $tag = "v$version"
+          $notes = Join-Path $env:RUNNER_TEMP 'tfo-release-notes.md'
+          $body = @"
+          Sol 6.1 es ahora el Sol predeterminado de TFO. Sol 6 queda disponible por petición explícita del usuario.
+
+          - Catálogo, esquemas MCP, colas, selección nativa y selector de Windows compatibles con Sol 6.1.
+          - Verificación exacta de modelo y esfuerzo; una respuesta de Sol 6 no satisface una petición de Sol 6.1.
+          - Precios API de referencia y estimaciones actualizados.
+          - Suite de 160 pruebas automatizadas y paquetes local/portable con sumas SHA-256.
+
+          La release sigue siendo preliminar. La aceptación del cambio de modelo en la interfaz real, ChatGPT Projects y la calibración de ahorro siguen pendientes. Las pruebas simuladas no certifican compatibilidad en vivo.
+
+          Descarga el ZIP local para instalar en Codex. Consulta INSTALL.md y docs/RELEASE_NOTES.md en el repositorio.
+          "@
+          [IO.File]::WriteAllText($notes, $body)
+          $args = @('release', 'create', $tag, "dist/tfo-$version-local.zip", "dist/tfo-$version-portable.zip", 'dist/SHA256SUMS.txt', '--repo', $env:GITHUB_REPOSITORY, '--target', $env:RELEASE_COMMIT, '--title', "TFO $version — Sol 6.1", '--notes-file', $notes)
+          if ($version.Contains('-')) { $args += '--prerelease' }
+          & gh @args
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed; existing releases are never overwritten' }

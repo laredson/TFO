@@ -1,4 +1,4 @@
-# Aceptación de TFO 1.0.0-rc.1
+# Aceptación de TFO 1.0.0-rc.2
 
 Este RC prepara la prueba del usuario antes de publicar una versión estable. Un resultado de una versión anterior no sustituye la validación del paquete actual.
 
@@ -13,7 +13,7 @@ El registro detallado de validación del RC se conserva fuera del paquete públi
 
 ## Puerta de aceptación antes de publicar la versión estable
 
-- [ ] Abrir un chat nuevo con TFO y confirmar versión `1.0.0-rc.1`.
+- [ ] Abrir un chat nuevo con TFO y confirmar versión `1.0.0-rc.2`.
 - [ ] Confirmar confianza de hooks mediante la interfaz normal si el host la solicita.
 - [ ] Probar tareas pequeñas y revisar archivos y recibos.
 - [ ] Solicitar un retorno con modelo/esfuerzo distinto del principal; dejar visible su marcador y el editor vacío, terminar el turno fuente y comprobar un turno nuevo posterior a todos los prerrequisitos.

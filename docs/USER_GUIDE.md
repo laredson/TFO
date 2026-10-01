@@ -1,4 +1,4 @@
-# Guía de usuario · TFO 1.0.0-rc.1
+# Guía de usuario · TFO 1.0.0-rc.2
 
 ## Antes de empezar
 
@@ -14,7 +14,7 @@ Pide una secuencia acotada de prompts para el chat actual. TFO guarda los pasos 
 
 ### Cadenas supervisadas
 
-Para dividir el trabajo, pide cadenas con tareas, dependencias y resultados esperados. Cada tarea puede indicar modelo y esfuerzo. El llamador activo prepara y ejecuta las llamadas nativas de Codex una vez cada una; TFO conserva los resultados y verifica selección y recibos antes de habilitar dependencias. El retorno final es un paso independiente que espera a que terminen las cadenas y el turno de origen. La integración también lleva una selección justificada por tarea: para una integración de código acotada, la decisión inicial puede ser Sol medio; para una comprobación mecánica, Luna. TFO debe aplicar y verificar lo pedido, sin heredar otro modelo como sustituto silencioso. El cambio del principal usa el adaptador de interfaz: deja visible el marcador exacto que entregue TFO y el editor vacío. Si no puede verificar destino y selección, exige revisión antes de enviar. El nombre de la herramienta avanzada es `tfo_budgeted_chat_start`.
+Para dividir el trabajo, pide cadenas con tareas, dependencias y resultados esperados. Cada tarea puede indicar modelo y esfuerzo. El llamador activo prepara y ejecuta las llamadas nativas de Codex una vez cada una; TFO conserva los resultados y verifica selección y recibos antes de habilitar dependencias. El retorno final es un paso independiente que espera a que terminen las cadenas y el turno de origen. La integración también lleva una selección justificada por tarea: para una integración de código acotada, la decisión inicial puede ser GPT-6.1 Sol medio; para una comprobación mecánica, Luna. TFO debe aplicar y verificar lo pedido, sin heredar otro modelo como sustituto silencioso. El cambio del principal usa el adaptador de interfaz: deja visible el marcador exacto que entregue TFO y el editor vacío. Si no puede verificar destino y selección, exige revisión antes de enviar. El nombre de la herramienta avanzada es `tfo_budgeted_chat_start`.
 
 Los cambios de selección por tarea se han verificado en el flujo integrado, pero siguen siendo supervisados. No equivalen a ejecución autónoma completa.
 

@@ -47,7 +47,8 @@ test("local Options API blocks foreign requests and requires a fresh confirmatio
     modelDecisions: [], startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
   const routes = await (await fetch(`${panel.origin}/api/routes`, { headers })).json();
   assert.equal(routes[0].pendingPrompt, "Di hola");
-  assert.deepEqual(routes[0].plannedSelection, { model: "gpt-6-sol", reasoning: "medium" });
+  assert.deepEqual(routes[0].plannedSelection, { model: "gpt-6.1-sol", reasoning: "medium" });
+  assert.equal(routes[0].execution.current.model, "gpt-6-sol", "observed source stays exact");
   assert.equal((await post("routes/control", { runId, action: "pause" })).status, 200);
   assert.equal((await post("routes/control", { runId, action: "cancel" })).status, 200);
   assert.equal(JSON.parse(fs.readFileSync(path.join(runDir, "state.json"), "utf8")).status, "cancelled");
