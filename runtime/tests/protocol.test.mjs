@@ -110,7 +110,13 @@ test("desktop diagnostic is read-only and reports access from the MCP process", 
   const result = await client.call("tools/call", { name: "tfo_ui_diagnostic", arguments: {} });
   assert.equal(result.result.isError, undefined);
   assert.match(result.result.structuredContent.status, /^(observed|unavailable)$/);
-  assert.equal(typeof result.result.structuredContent.windowCount, "number");
+  const diagnostic = result.result.structuredContent;
+  assert.ok(diagnostic.windowCount === null || typeof diagnostic.windowCount === "number");
+  if (diagnostic.windowCount === null) {
+    assert.equal(diagnostic.status, "unavailable");
+    assert.equal(diagnostic.readinessChecked, false);
+    assert.ok(diagnostic.reason);
+  }
 });
 
 test("health returns readiness without logging to stdout", async t => {

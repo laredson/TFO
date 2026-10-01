@@ -40,7 +40,14 @@ export function runUiBridge(mode, request) {
     child.stdin.end(JSON.stringify(request));
   });
 }
-export function diagnoseDesktopAccess() { return runUiBridge("diagnose", {}); }
+export async function diagnoseDesktopAccess(bridge = runUiBridge) {
+  try { return await bridge("diagnose", {}); }
+  catch (error) {
+    // A failed observation cannot establish a window count or sending readiness.
+    return { status: "unavailable", windowCount: null, reason: error.message,
+      readOnly: true, readinessChecked: false };
+  }
+}
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function waitForUiReady({probe, guard, wait = delay, now = Date.now}) {
   const deadline = now() + 12000;

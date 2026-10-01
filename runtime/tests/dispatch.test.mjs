@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createPromptDispatcher, selectorMatchesSelection, uiBridgeFailure, waitForUiReady } from "../queue-transport.mjs";
+import { createPromptDispatcher, diagnoseDesktopAccess, selectorMatchesSelection, uiBridgeFailure, waitForUiReady } from "../queue-transport.mjs";
 const source = "11111111-1111-1111-1111-111111111111";
 const target = "22222222-2222-2222-2222-222222222222";
 const layout = {window:[0,0,1200,900],marker:[400,600,200,30],editor:[300,700,800,100],selector:[800,850,150,30]};
@@ -14,7 +14,7 @@ test("Sol 6.1 picker labels never match old Sol or a different effort", () => {
   assert.equal(selectorMatchesSelection("GPT-6.1 Sol Alto", sol), false);
   assert.equal(selectorMatchesSelection("GPT-6.1 Sol Medio", { ...sol, model: "gpt-6-sol" }), false);
 });
-test("bridge errors distinguish an unsent draft from an attempted or unknown send", () => {
+test("bridge errors distinguish an unsent draft from an attempted or unknown send", async () => {
   const report = {phase:"waiting_for_composer",textEntryAttempted:true,sendAttempted:false,error:"Composer did not confirm"};
   const before = uiBridgeFailure(`TFO_UI_FAILURE:${JSON.stringify(report)}\n`,1);
   assert.equal(before.deliveryStage,"before_send");
@@ -27,6 +27,13 @@ test("bridge errors distinguish an unsent draft from an attempted or unknown sen
   const unknown = uiBridgeFailure('terminated without a report',null);
   assert.equal(unknown.sendAttempted,undefined);
   assert.equal(unknown.deliveryStage,undefined);
+  const diagnostic = await diagnoseDesktopAccess(async (mode, request) => {
+    assert.equal(mode, "diagnose");
+    assert.deepEqual(request, {});
+    throw new Error("Desktop observation timed out");
+  });
+  assert.deepEqual(diagnostic, {status:"unavailable",windowCount:null,
+    reason:"Desktop observation timed out",readOnly:true,readinessChecked:false});
 });
 function fixture(overrides = {}) {
   const calls = [];

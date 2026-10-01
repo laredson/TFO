@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0-rc.2+codex.sol61",
+  "version": "1.0.0-rc.2+codex.sol61.1",
   "source": "../../runtime",
   "sha256": {
     "server.mjs": "2e866881559d8c69d9f9546928602e29a4de0b1fdc6074bee34ea4cc7af377ce",
@@ -15,7 +15,7 @@
     "ui-send-guard.mjs": "9dd77eab3e49dee43d08730f9ad3da5b834218a3f396f4aad7200a65d526a29f",
     "model-policy.mjs": "8df01215ee6f19a16f9db6550f1b3d9947b2a7601c8080b73d0a91687107dee1",
     "host-selection.mjs": "b6bdd57db136503c56d1b978fa9c71c6e817e19e65f317ed3b6ed276b8f0d878",
-    "queue-transport.mjs": "c4960c3aef82ac11750f44e3b82f24c14c1655a9ee17fc2a9187e91d250fac49",
+    "queue-transport.mjs": "d8058e21cc4d0618f8fd23e808fda0284f21da34fb32fe087bc83b6770434b7c",
     "app-server-client.mjs": "157f4444e135525d4e18492c9d5c51d3d68118c0264410c51db50224bec4a66c",
     "budget.mjs": "788cecf54c8e2f824fd68b0f43477eaf61fa01c84cc5afdd76007304b60d4ad2",
     "settings.mjs": "7b52374dfad6eb41c5c77ca3d80648b895366d2966fd27123702210af6df8dbb",
