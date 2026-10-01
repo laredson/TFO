@@ -11,7 +11,7 @@
     "queue-supervisor.mjs": "e17e9a1a23c26b99417f87429f1a74fd94dbb4e62eb280cfd29ffb752df4ad38",
     "dispatch-worker.mjs": "f7fe9c602c5e46974f916c8c4a000fbfb1770d2c70bf4afc6c7335ed38952b28",
     "stop-hook.mjs": "cfecb524e2ee36828c7fc5228bccc1ba51c5f075e1ccfe231c9aa9650b12c192",
-    "ui-bridge.ps1": "5d129cef371e7a0be607348dd50aa29cba83d75a61530e8a46600a4f971f8dec",
+    "ui-bridge.ps1": "c536264b233e348bab59919254d32611bbacb5c62b3c1768b44d03a7cc5a87d8",
     "ui-send-guard.mjs": "9dd77eab3e49dee43d08730f9ad3da5b834218a3f396f4aad7200a65d526a29f",
     "model-policy.mjs": "8df01215ee6f19a16f9db6550f1b3d9947b2a7601c8080b73d0a91687107dee1",
     "host-selection.mjs": "b6bdd57db136503c56d1b978fa9c71c6e817e19e65f317ed3b6ed276b8f0d878",

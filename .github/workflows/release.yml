@@ -27,6 +27,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Set a canonical temporary directory for worktree tests
+        shell: pwsh
+        run: |
+          $testTemp = 'C:\tfo-test-temp'
+          New-Item -ItemType Directory -Path $testTemp -Force | Out-Null
+          "TEMP=$testTemp" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TMP=$testTemp" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Build plugin
         run: node scripts/build-plugin.mjs
       - name: Validate runtime and package

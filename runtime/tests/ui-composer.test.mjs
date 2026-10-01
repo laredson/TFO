@@ -7,6 +7,7 @@ test('PowerShell waits for exact rendered text and sends once; stale, changed an
   const script = `
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($env:TFO_TEST_BRIDGE,[ref]$null,[ref]$null)
 foreach($name in @('Assert-ChatReady','Get-PreparedComposer','Wait-PreparedComposer','Send-PreparedPrompt')) {
  $fn=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)

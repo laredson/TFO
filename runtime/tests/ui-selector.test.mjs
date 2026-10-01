@@ -8,6 +8,7 @@ test("PowerShell selector lookup survives regex captures and rejects ambiguous c
   const script = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:TFO_TEST_BRIDGE, [ref]$null, [ref]$null)
 $definition = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-Selector'}, $true)
 Invoke-Expression $definition.Extent.Text

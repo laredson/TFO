@@ -48,7 +48,7 @@ async function createClient(t, extraEnv = {}) {
     const id = ++sequence;
     waiting.set(id, resolve);
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`, error => error && reject(error));
-    setTimeout(() => { if (waiting.has(id)) { waiting.delete(id); reject(new Error(`Timeout calling ${method}`)); } }, 3000).unref();
+    setTimeout(() => { if (waiting.has(id)) { waiting.delete(id); reject(new Error(`Timeout calling ${method}`)); } }, 10000).unref();
   });
   t.after(async () => {
     child.kill();

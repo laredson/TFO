@@ -6,6 +6,7 @@ test('UI preflight requires a visible marker and composer bounds and has no inpu
  const script=`
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($env:TFO_TEST_BRIDGE,[ref]$null,[ref]$null)
 foreach($name in @('Get-UiProbe','Assert-Ready','Assert-ChatReady','Get-Items','Get-EditorValue','Find-One','Find-Selector')) {
  $fn=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)

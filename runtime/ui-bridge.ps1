@@ -1,6 +1,7 @@
 param([ValidateSet('diagnose', 'probe', 'send')][string]$Mode = 'probe')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -TypeDefinition @'
 using System;
