@@ -1,0 +1,72 @@
+[
+  {
+    "mode": "normal",
+    "label": "Normal",
+    "game": "Jardín de luciérnagas",
+    "zip": "minigame_normal_jardin_de_luciernagas.zip",
+    "windowsExecutables": [
+      "Code Fragment Console/CodeFragmentConsole.exe"
+    ],
+    "status": "completed_with_limitations"
+  },
+  {
+    "mode": "fast",
+    "label": "Rapido",
+    "game": "Nidos de luz",
+    "zip": "minigame_rapido_nidos_de_luz.zip",
+    "windowsExecutables": [
+      "Nidos de luz/Nidosdeluz.exe"
+    ],
+    "status": "completed_with_limitations"
+  },
+  {
+    "mode": "saving",
+    "label": "Ahorro",
+    "game": "Taller de luciérnagas",
+    "zip": "minigame_ahorro_taller_de_luciernagas.zip",
+    "windowsExecutables": [
+      "Taller de luciernagas/Tallerdeluciernagas.exe"
+    ],
+    "status": "completed_with_limitations"
+  },
+  {
+    "mode": "quality",
+    "label": "Calidad",
+    "game": "Jardín de chispas",
+    "zip": "minigame_calidad_jardin_de_chispas.zip",
+    "windowsExecutables": [
+      "Jardin de chispas/Jardindechispas.exe"
+    ],
+    "status": "completed_with_limitations"
+  },
+  {
+    "mode": "custom_luna_low",
+    "label": "Custom Luna low",
+    "game": "Jardín de chispas",
+    "zip": "minigame_lunalow_jardin_de_chispas.zip",
+    "windowsExecutables": [
+      "Code Fragment Console/CodeFragmentConsole.exe"
+    ],
+    "status": "incomplete_preserved"
+  },
+  {
+    "mode": "max_speed",
+    "label": "MaxSpeed",
+    "game": "Jardín de luciérnagas",
+    "zip": "minigame_maxspeed_jardin_de_luciernagas.zip",
+    "windowsExecutables": [
+      "Jardin de luciernagas/Jardindeluciernagas.exe"
+    ],
+    "status": "completed_with_limitations"
+  },
+  {
+    "mode": "hq",
+    "label": "HQ",
+    "game": "Jardín de luces",
+    "zip": "minigame_hq_jardin_de_luces.zip",
+    "windowsExecutables": [
+      "Jardin de luces/Jardindeluces.exe"
+    ],
+    "status": "incomplete_preserved"
+  }
+]

@@ -1,0 +1,33 @@
+name: Publish partial Code Fragment benchmark
+on:
+  push:
+    branches: [main]
+    paths:
+      - benchmarks/code-fragment-2026-10-07/**
+      - scripts/package-benchmark.py
+      - scripts/publish-benchmark-assets.py
+      - .github/workflows/benchmark-artifacts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tfo-benchmark-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'laredson/TFO'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify payload and package public artifacts
+        run: python scripts/package-benchmark.py
+      - name: Attach artifacts to existing prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish-benchmark-assets.py

@@ -1,0 +1,29 @@
+﻿mode,task_id,lane,status,normal_model,normal_effort,requested_model,requested_effort,observed_model,observed_effort,verification,reason
+normal,logic,logic,completed,gpt-6.1-sol,medium,gpt-6.1-sol,medium,gpt-6.1-sol,medium,native_host_receipt,"Reglas, progresión y contrato de integración requieren razonamiento de código acotado."
+normal,qa,qa,completed,gpt-6-luna,medium,gpt-6-luna,medium,gpt-6-luna,medium,native_host_receipt,Diseño de recorrido y comprobaciones de requisitos concretos es tarea acotada.
+normal,integrate,main,completed,gpt-6.1-sol,medium,gpt-6.1-sol,medium,,,active_main_final_host_receipt,Integración y compilación Defold con validación real.
+normal,ui_review,qa,completed,gpt-6.1-sol,medium,gpt-6.1-sol,medium,gpt-6.1-sol,medium,native_host_receipt,Revisar lógica del GUI y controles requiere lectura de código y errores de integración.
+normal,final,main,completed,gpt-6.1-sol,medium,gpt-6.1-sol,medium,,,active_main_final_host_receipt,Reparar revisión y conservar entrega final.
+saving,build-game,game,completed,gpt-6.1-sol,medium,gpt-6.1-sol,low,gpt-6.1-sol,low,native_host_receipt,"GUI acotada con verificación, reducir correcciones."
+saving,design-check,checks,blocked,gpt-6-luna,medium,gpt-6-luna,medium,gpt-6-luna,medium,native_host_receipt,Checklist infantil independiente y acotado.
+saving,integrate,main,completed,gpt-6.1-sol,medium,gpt-6.1-sol,low,,,active_main_final_host_receipt,Integración inline observada.
+saving,check-contract,checks,completed,gpt-6-luna,low,gpt-6-luna,low,gpt-6-luna,low,native_host_receipt,Leer contrato copiado y corregir plan breve.
+fast,logic,logic,queued,gpt-6.1-sol,medium,gpt-6.1-sol,high,,,,Rápido usa high para cerrar lógica y pruebas en una entrega.
+fast,qa,qa,completed,gpt-6-luna,medium,gpt-6.1-sol,medium,gpt-6.1-sol,medium,native_host_receipt,Rápido eleva análisis acotado a Sol medium para entregar recorrido/copy pronto.
+fast,integration,main,pending,gpt-6.1-sol,medium,gpt-6.1-sol,high,,,,Integración y validación en turno real Sol high bajo perfil Rápido.
+max_speed,logic,logic,completed,gpt-6.1-sol,medium,gpt-6.1-sol,high,gpt-6.1-sol,high,native_host_receipt,MaxSpeed prioriza implementación correcta en una ronda de un módulo acotado con reglas e inventario verificables.
+max_speed,scene,scene,queued,gpt-6.1-sol,medium,gpt-6.1-sol,xhigh,gpt-6.1-sol,xhigh,,"MaxSpeed usa mayor potencia Sol para resolver GUI, animación y scaffold en paralelo sin rondas separadas de assets."
+max_speed,integrate,main,pending,gpt-6.1-sol,medium,gpt-6.1-sol,xhigh,,,,"Turno real verificado Sol xhigh asignado a maestro MaxSpeed para integrar, probar motor, documentar evidencias."
+max_speed,deliver,main,pending,gpt-6.1-sol,medium,gpt-6.1-sol,xhigh,,,,"Cierre inline en turno real Sol xhigh, sin cambio simulado de modelo."
+quality,logic,logic,completed,gpt-6-luna,medium,gpt-6.1-sol,medium,gpt-6.1-sol,medium,native_host_receipt,Módulo Lua acotado con contrato preciso y pruebas; Calidad eleva Luna a Sol medium.
+quality,ui,ui,completed,gpt-6.1-sol,medium,gpt-6-astra,medium,gpt-6-astra,medium,native_host_receipt,"Interfaz Defold, feedback y animaciones infantiles requieren Sol medium Normal; Calidad eleva a Astra medium."
+quality,integration,main,completed,gpt-6.1-sol,medium,gpt-6-astra,medium,,,active_main_final_host_receipt,"Integración y motor, Astra medium coincide con turno real por Calidad."
+hq,rules,logic,queued,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Logica de transformaciones y pruebas de inventario: Normal Sol medium; HQ Astra misma potencia.
+hq,gui,visual,queued,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Presentacion y feedback infantil en Defold: Normal Sol medium; HQ Astra misma potencia.
+hq,integrate,main,pending,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Coordinacion real Astra medium corresponde a Normal Sol medium en HQ.
+hq,delivery,main,pending,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Cierre y evidencia en el turno principal Astra medium.
+hq,tfo_review_0,tfo_review_0,pending,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Revisión independiente de calidad del resultado integrado.
+hq,tfo_close_0,main,pending,gpt-6.1-sol,medium,gpt-6-astra,medium,,,,Integrar la revisión y verificar el cierre en el turno principal activo.
+custom_luna_low,mechanic,design,dispatching,gpt-6.1-sol,medium,gpt-6-luna,low,,,,Custom fija Luna low. Referencia Normal: Sol medium.
+custom_luna_low,ux-audit,ux-review,pending,gpt-6.1-sol,medium,gpt-6-luna,low,,,,Custom fija Luna low. Referencia Normal: Sol medium.
+custom_luna_low,integrate,main,pending,gpt-6.1-sol,medium,gpt-6-luna,low,,,,Coordinador Custom Luna low; referencia Normal Sol medium.
