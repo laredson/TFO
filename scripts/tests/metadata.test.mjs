@@ -10,14 +10,14 @@ test("local and portable identities agree without a root manifest", () => {
   const local = read("plugins/tfo/.codex-plugin/plugin.json");
   const portable = read("plugins/tfo/plugin.portable.json");
   assert.equal(local.name, "tfo");
-  assert.equal(local.version.split("+")[0], "1.0.0-rc.2");
+  assert.equal(local.version.split("+")[0], "1.0.0-rc.3");
   assert.equal(portable.name, local.name);
   assert.equal(portable.version, local.version);
   assert.deepEqual(portable.extensions["com.openai"].interface.defaultPrompt, local.interface.defaultPrompt);
   assert.deepEqual(local.interface.defaultPrompt, [
     "Organiza este proyecto en tareas paralelas con TFO y reúne los resultados en este chat.",
     "Coordina dos cadenas de tareas dependientes y luego integra el proyecto.",
-    "Abre las opciones de ahorro de TFO."
+    "Abre las opciones de modos y permisos de TFO."
   ]);
   assert.equal(fs.existsSync(path.join(root, "plugins/tfo/plugin.json")), false);
   assert.ok(read("plugins/tfo/hooks/hooks.json").hooks.Stop.length > 0);

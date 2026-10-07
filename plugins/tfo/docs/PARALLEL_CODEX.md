@@ -1,8 +1,38 @@
 # Coordinación de chats de Codex con TFO
 
+## Principal activo
+
+Las nuevas coordinaciones nativas usan `coordinationMode: active_main`. El principal conserva planificación, adaptación, despacho de auxiliares, integración y publicación autorizada. TFO registra intenciones antes de cada envío, comprueba recibos y mantiene un observador independiente; no contiene otra IA ni envía trabajo normal mientras el principal esté activo.
+
+Ejecutar cada acción de `tfo_native_claim` una vez, reconocer el ID real con `tfo_native_acknowledge` y esperar con `tfo_native_wait(runId, afterCursor, timeoutMs)`. El máximo es 60 segundos; cada respuesta entrega hasta 20 eventos compactos con cursor. `tfo_native_results` entrega páginas de 20 resúmenes o el recibo completo de una tarea. Los prompts llevan referencias a evidencias y resúmenes acotados.
+
+`maxParallelWorkers` permite 1–100 trabajadores simultáneos (2 por defecto), con hasta 100 auxiliares y 1.000 tareas por flujo. El valor explícito del plan prevalece sobre el predeterminado persistente. Las opciones globales afectan a flujos nuevos; los límites en caliente se cambian expresamente por flujo. Reducirlos permite terminar turnos activos; aumentar requiere instrucción explícita del usuario. El límite incluye despachos intentados y turnos pendientes de finalizar y no garantiza capacidad del host.
+
+Un rechazo estructurado del host con `code: HOST_CAPACITY` y `deliveryAttempted: false` permite dejar la tarea pendiente y conservar el intento en el historial mediante `tfo_native_defer_dispatch`. Un mensaje de error sin esa prueba no autoriza repetir el envío. El controlador convencional aplica la misma regla y espera antes de un nuevo despacho; el límite configurado por el usuario se conserva.
+
+`tfo_native_revise` requiere `expectedRevision`, añade trabajo y reemplaza solo tareas no intentadas. Conserva resultados bloqueados: `resolveBlocked` enlaza una reparación cuyo recibo completado permite continuar. Las tareas propias se registran con `tfo_native_checkpoint`. `tfo_native_finish` devuelve `mainCompleteMarker`: incluirlo en la respuesta final y acabar el turno permite verificar el recibo real y liberar reservas. Un checkpoint local no sustituye el recibo final.
+
+El modelo del principal permanece fijo durante cada turno. Cada tarea y recuperación guarda selección y motivo dentro del techo autorizado. Cambiar la selección del principal requiere otro turno y transporte verificado.
+
+En Git, la creación del auxiliar empieza con un bootstrap sin escrituras. Reconocer solo el threadId real y el workspace devuelto, verificando worktree registrado, rama con nombre, repositorio y aislamiento antes de continuar. Un clientThreadId pendiente no acredita creación. Los auxiliares conservan cambios locales; solo el principal realiza commits, pushes y PR borrador autorizados del hito revisado. El PR no se fusiona automáticamente.
+
+### Recuperación y controles
+
+El observador usa una copia inmutable del runtime y registra propietario. Una caída terminal comprobada o cierre prematuro permite como máximo tres intentos por ejecución, espaciados 1, 3 y 10 minutos tras los fallos sucesivos. Cada intento persiste su intención antes de enviar un prompt único al mismo chat con referencias al estado guardado. Esperas activas, pausas e interrupciones ambiguas no disparan reactivación.
+
+Una entrega incierta requiere `tfo_native_reconcile`, sin reenvío. El principal recuperado adopta su turno con `tfo_native_recover`; no repite trabajadores intentados. `pause`, `resume` y `cancel` controlan nuevos despachos y recuperación conservando evidencias. Cancelar drena turnos intentados. Al arrancar el MCP se restauran observadores elegibles con exclusión entre procesos; el estado se conserva cuando el host no está disponible. Agotados los intentos, el flujo exige revisión.
+
+Antes de intentar la recuperación se comprueba el acceso a la cola nativa. Si falta, `coordinator.recoveryAccess` conserva el motivo y el mismo intento programado sin enviar; el observador sigue recogiendo resultados. El contexto de permisos importa: se verificó una reactivación real desde el MCP instalado, mientras una prueba de consola restringida encontró la base de Codex en solo lectura. Las otras caídas, esperas de 3/10 minutos y reinicios tienen pruebas simuladas; no se presentan como validación real completa.
+
+La observación cachea identidad y posición de lectura, procesa datos nuevos e invalida el caché ante reemplazo o truncado. Los recibos completos siguen siendo la autoridad. Esperar no añade razonamiento continuo; cada retorno o timeout puede producir una continuación del modelo. Medir esos ciclos antes de afirmar ahorro.
+
+## Compatibilidad con retorno diferido
+
+Las secciones siguientes describen `coordinationMode: deferred_join` y evidencia histórica. Los planes guardados no cambian de modo ni de límites. El controlador convencional `tfo_parallel_*` conserva este modo; para coordinación activa usar `tfo_native_*`.
+
 ## Selección por tarea: prueba supervisada
 
-`tfo_native_*` añade un controlador supervisado para las herramientas nativas de Codex: prepara un DAG con `selection` por nodo y un límite `maxParallelWorkers` de 1 a 8 (2 por defecto). `claim` registra intención y devuelve los argumentos exactos para crear o continuar el chat; el llamador ejecuta una vez la herramienta indicada y registra el ID real con `acknowledge`. `observe` comprueba el recibo de delegación, selección real, respuesta, uso y dependencias. La creación realiza la primera tarea útil. No hay otro modelo dentro de TFO.
+`tfo_native_*` añade un controlador supervisado para las herramientas nativas de Codex: prepara un DAG con `selection` por nodo y un límite `maxParallelWorkers` de 1 a 100 (2 por defecto). `claim` registra intención y devuelve los argumentos exactos para crear o continuar el chat; el llamador ejecuta una vez la herramienta indicada y registra el ID real con `acknowledge`. `observe` comprueba el recibo de delegación, selección real, respuesta, uso y dependencias. La creación realiza la primera tarea útil. No hay otro modelo dentro de TFO.
 
 Esta modalidad necesita un llamador activo de herramientas del host: no es autónoma al cerrar el chat. Por ahora está limitada a directorios hijos separados fuera de Git (`scratch_folders`), explícitamente autorizados; son límites de tarea, no un sandbox. El controlador convencional `tfo_parallel_*` descrito abajo conserva sus modelos y exige worktrees para escritura. La cola `codex queue` no incluye modelo/esfuerzo en su petición por mensaje; sus opciones generales no prueban cambio de selección. Las continuaciones de trabajadores siguen necesitando un llamador activo; el retorno final dispone de un adaptador independiente.
 

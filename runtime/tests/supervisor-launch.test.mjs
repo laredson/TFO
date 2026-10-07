@@ -6,6 +6,8 @@ import path from "node:path";
 import { createPromptQueue, isAlive } from "../prompt-queue.mjs";
 import { launchSupervisor, snapshotSupervisor, supervisorFiles } from "../supervisor-launch.mjs";
 import { readHostTurnState } from "../host-selection.mjs";
+import { snapshotProjectSupervisor } from "../project-supervisor.mjs";
+import { snapshotNativeCoordinator } from "../native-coordinator-supervisor.mjs";
 const thread = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", turn = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const wait = ms => new Promise(r => setTimeout(r,ms));
 async function until(check) { for (let i=0;i<100;i++) { if (check()) return; await wait(100); } throw new Error("Timed out"); }
@@ -65,4 +67,56 @@ test("immutable snapshots reject modified contents instead of overwriting them",
   assert.equal(snapshotSupervisor(dir).root,first.root);
   fs.appendFileSync(path.join(first.root,"queue-supervisor.mjs"),"\n// changed");
   assert.throws(()=>snapshotSupervisor(dir),/integrity/);
+});
+
+test("all atomic snapshot publishers retry transient Windows locks before publishing complete contents", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-snapshot-retry-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const originalRename = fs.renameSync;
+  for (const snapshot of [snapshotSupervisor, snapshotProjectSupervisor, snapshotNativeCoordinator]) {
+    let calls = 0, staging;
+    fs.renameSync = (source, destination) => {
+      staging = source; calls++;
+      assert.equal(fs.existsSync(destination), false, "nothing is published before the atomic rename");
+      if (calls <= 2) { const error = new Error("Injected transient Windows snapshot lock"); error.code = calls === 1 ? "EPERM" : "EBUSY"; throw error; }
+      return originalRename(source, destination);
+    };
+    let result;
+    try { result = snapshot(dir); } finally { fs.renameSync = originalRename; }
+    const published = typeof result === "string" ? result : result.root;
+    assert.equal(calls, 3); assert.equal(fs.existsSync(staging), false);
+    assert.ok(fs.existsSync(path.join(published, "snapshot-publish.mjs")));
+    const repeated = snapshot(dir);
+    assert.equal(typeof repeated === "string" ? repeated : repeated.root, published);
+  }
+});
+
+test("permanent snapshot publication errors keep their original error and stop after bounded retries", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-snapshot-permanent-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const originalRename = fs.renameSync;
+  for (const code of ["EPERM", "EACCES", "EIO"]) {
+    const data = path.join(dir, code), injected = Object.assign(new Error(`Permanent ${code} snapshot failure`), { code });
+    let calls = 0, staging, target;
+    fs.renameSync = (source, destination) => { calls++; staging = source; target = destination; throw injected; };
+    try { assert.throws(() => snapshotSupervisor(data), error => error === injected); }
+    finally { fs.renameSync = originalRename; }
+    assert.equal(calls, code === "EIO" ? 1 : 6); assert.equal(fs.existsSync(target), false);
+    assert.ok(fs.readFileSync(path.join(staging, "queue-supervisor.mjs")).equals(fs.readFileSync(path.join("runtime", "queue-supervisor.mjs"))));
+  }
+});
+
+test("a destination which appears during snapshot retry is verified without any overwrite", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-snapshot-race-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const originalRename = fs.renameSync; let calls = 0, target;
+  fs.renameSync = (_source, destination) => {
+    calls++; target = destination; fs.mkdirSync(destination);
+    fs.writeFileSync(path.join(destination, "queue-supervisor.mjs"), "Existing damaged snapshot");
+    throw Object.assign(new Error("Another publisher created the destination"), { code: "EBUSY" });
+  };
+  try { assert.throws(() => snapshotSupervisor(dir), /integrity/); }
+  finally { fs.renameSync = originalRename; }
+  assert.equal(calls, 1);
+  assert.equal(fs.readFileSync(path.join(target, "queue-supervisor.mjs"), "utf8"), "Existing damaged snapshot");
 });

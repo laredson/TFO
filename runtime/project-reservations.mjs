@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { replaceAtomicFile } from "./atomic-file.mjs";
 
 const stamp = () => new Date().toISOString();
 const ACTIVE = new Set(["held", "needs_review"]);
@@ -106,7 +107,7 @@ function readLedger(file) {
 function writeLedger(file, ledger) {
   const temporary = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
   fs.writeFileSync(temporary, JSON.stringify(ledger, null, 2), { flag: "wx" });
-  try { fs.renameSync(temporary, file); }
+  try { replaceAtomicFile(temporary, file); }
   catch (error) { try { fs.unlinkSync(temporary); } catch {} throw error; }
 }
 
@@ -193,5 +194,22 @@ export function createProjectReservationStore({ dataDir, adapter = {} }) {
     });
   }
 
-  return { reserve: (id, plan) => reserve(id, plan), extend: (id, plan) => reserve(id, plan, true), get, markUncertain, release };
+  // Only the receipt-verifying engine calls this after it has reconciled every
+  // uncertain action. The resource claims never change and no host message is sent.
+  function reconcile(runId, evidence) {
+    if (evidence?.verification !== "completed_receipts_verified" || !Array.isArray(evidence.turnIds) ||
+        !evidence.turnIds.length || evidence.turnIds.some(id => typeof id !== "string" || !id.trim())) {
+      throw new Error("Reservation reconciliation requires verified completed receipt evidence");
+    }
+    return mutate(ledger => {
+      const item = ledger.reservations.find(entry => entry.runId === runId);
+      if (!item || item.status !== "needs_review") throw new Error("Only an uncertain retained reservation can be reconciled");
+      item.status = "held"; item.reason = "All uncertain actions reconciled from exact completed receipts; no resend";
+      item.updatedAt = stamp(); item.reconciledAt = item.updatedAt;
+      item.reconciliation = { verification: evidence.verification, turnIds: [...new Set(evidence.turnIds)] };
+      return item;
+    });
+  }
+
+  return { reserve: (id, plan) => reserve(id, plan), extend: (id, plan) => reserve(id, plan, true), get, markUncertain, release, reconcile };
 }

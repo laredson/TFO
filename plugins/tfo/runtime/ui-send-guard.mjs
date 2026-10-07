@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { readHostTurnState } from "./host-selection.mjs";
 import { readProjectThread } from "./project-host.mjs";
 import { createProjectReservationStore } from "./project-reservations.mjs";
+import { createWorkPolicyStore } from "./work-policy.mjs";
 
 const same = (a, b) => a?.model === b?.model && a?.reasoning === b?.reasoning;
 export async function verifyUiSendGuard(stateFile, runId, sourceTurnId, expectedOwnerPid = null,
@@ -12,6 +13,8 @@ export async function verifyUiSendGuard(stateFile, runId, sourceTurnId, expected
       reservationStore = createProjectReservationStore } = {}) {
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   if (state.id !== runId) throw new Error("Route changed before UI action");
+  const policyDataDir = /^flow_/.test(runId) ? path.dirname(path.dirname(stateFile)) : path.dirname(path.dirname(path.dirname(stateFile)));
+  createWorkPolicyStore(policyDataDir).assertDispatch(state.workPolicy);
   if (/^flow_[a-z0-9_]+$/.test(runId || "")) {
     const file = path.join(path.dirname(path.dirname(stateFile)), "native-flows", `${runId}.json`);
     if (path.resolve(stateFile) !== path.resolve(file)) throw new Error("Wrong native flow state file");

@@ -5,6 +5,16 @@ import os from "node:os";
 import path from "node:path";
 import { readHostSelection, readHostTurnReceipt, readHostTurnState, findHostTurnsForPrompt } from "../host-selection.mjs";
 const id = "12345678-1234-1234-1234-123456789abc";
+test("weekly usage selects the seven-day window and never labels a five-hour window weekly", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-weekly-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true })); fs.mkdirSync(path.join(dir, "sessions"));
+  const file = path.join(dir, "sessions", `rollout-${id}.jsonl`);
+  const record = rate_limits => JSON.stringify({ type: "event_msg", payload: { type: "token_count", rate_limits } }) + "\n";
+  fs.writeFileSync(file, record({ primary: { used_percent: 45, window_minutes: 300 } }));
+  assert.equal((await readHostTurnState(id, dir)).weeklyUsedPercent, null);
+  fs.appendFileSync(file, record({ primary: { used_percent: 45, window_minutes: 300 }, secondary: { used_percent: 21, window_minutes: 10080 } }));
+  assert.equal((await readHostTurnState(id, dir)).weeklyUsedPercent, 21);
+});
 test("host probe reads only matching turn metadata and rejects missing or unknown model information", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tfo-host-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

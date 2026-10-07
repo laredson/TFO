@@ -1,4 +1,6 @@
-# Instalar TFO 1.0.0-rc.2
+# Instalar TFO 1.0.0-rc.3
+
+Esta candidata incorpora [Inteligente, Custom, uso, permisos y mediciones](docs/SMART_MODES.md). Una instalación nueva usa Automático · Permitir siempre · Inteligente Normal; una actualización conserva preferencias explícitas. La aceptación del paquete instalado y la comparativa se registran por separado.
 
 Este archivo acompaña al candidato local para Windows/Codex. Extrae el ZIP completo en una carpeta estable llamada TFO. Conserva la estructura, incluida .agents/plugins/marketplace.json.
 
@@ -28,4 +30,4 @@ Conserva el paquete anterior y sus datos hasta completar una prueba en vivo. Si 
 
 ## Paquete portable
 
-El archivo tfo-1.0.0-rc.2-portable.zip contiene una sola carpeta tfo con plugin.json y mcp.json portables. Está preparado para la futura carga en complementos. Usa el archivo local para la instalación en Codex: el formato portable cambia el descubrimiento de hooks en el host local actual. No implica compatibilidad de orquestación con ChatGPT Projects.
+El archivo tfo-1.0.0-rc.3-portable.zip contiene una sola carpeta tfo con plugin.json y mcp.json portables. Está preparado para la futura carga en complementos. Usa el archivo local para la instalación en Codex: el formato portable cambia el descubrimiento de hooks en el host local actual. No implica compatibilidad de orquestación con ChatGPT Projects.

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { replaceAtomicFile } from "./atomic-file.mjs";
 
 const dataDir = path.resolve(process.env.TFO_DATA_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), "TFO", "data"));
 let input = "";
@@ -22,7 +23,7 @@ if (event.hook_event_name === "Stop" && uuid.test(event.session_id || "") && uui
   fs.writeFileSync(temporary, JSON.stringify({ threadId: event.session_id, turnId: event.turn_id,
     receivedAt: new Date().toISOString(), stopHookActive: event.stop_hook_active === true,
     runtimeRoot: path.dirname(fileURLToPath(import.meta.url)) }));
-  fs.renameSync(temporary, signalFile);
+  replaceAtomicFile(temporary, signalFile);
 }
 if (event.hook_event_name === "Stop" && !event.stop_hook_active && event.session_id && event.turn_id) {
   const runsDir = path.join(dataDir, "runs");

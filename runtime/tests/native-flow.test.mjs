@@ -15,7 +15,7 @@ function fixture(t) {
   const receipts = new Map();
   const host = { read: async id => states.get(id), bootstrap: async (id, prompt) => receipts.get(`${id}:${prompt}`) };
   const flow = createNativeFlow({ dataDir: path.join(root, "data"), host });
-  const args = { surface: "codex", projectId: main, mainThreadId: main, projectPath: root, initialSelection: sol("high"),
+  const args = { surface: "codex", coordinationMode: "deferred_join", projectId: main, mainThreadId: main, projectPath: root, initialSelection: sol("high"),
     objective: "Native selections", workspaceMode: "scratch_folders", mainWorkspace: path.join(root, "release"),
     lanes: ["a", "b"].map(id => ({ id, workspace: path.join(root, id), access: "write" })),
     nodes: [{ id: "a1", lane: "a", prompt: "Create text", dependencies: [], selection: luna("medium") },

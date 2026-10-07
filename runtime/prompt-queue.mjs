@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { validateSelection, assertNotHigher, assertQueueSelection } from "./model-policy.mjs";
+import { createWorkPolicyStore } from "./work-policy.mjs";
+import { assertWorkBudget } from "./work-budget.mjs";
+import { replaceAtomicFile } from "./atomic-file.mjs";
 
 const stamp = () => new Date().toISOString();
 const QUEUE_ID = /^queue_[a-z0-9_]+$/;
@@ -60,7 +63,7 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
     const temp = `${target}.${process.pid}.${crypto.randomBytes(3).toString("hex")}.tmp`;
     state.updatedAt = stamp();
     fs.writeFileSync(temp, JSON.stringify(state, null, 2), "utf8");
-    fs.renameSync(temp, target);
+    replaceAtomicFile(temp, target);
   };
   const change = (id, action) => lockedFile(path.join(path.dirname(file(id)), "mutation.lock"), () => {
     const state = read(id);
@@ -79,12 +82,20 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
   function recordReceipt(state, step, turnId, receipt) {
     state.completedSteps.push({ id: step.id, title: step.title, success: true, completedAt: stamp(), messageId: turnId,
       requested: step.selection, observed: { model: receipt.model, reasoning: receipt.reasoning },
+      decision: step.decision || null, startedAt: receipt.startedAt || null, usage: receipt.usage || null,
       verification: step.expectedResponse === null ? "turn_completed" : "expected_response", summary: receipt.finalResponse.slice(0,8192),
       responseSha256: crypto.createHash("sha256").update(receipt.finalResponse).digest("hex") });
     state.currentIndex += 1; state.dispatch = null;
   }
 
   async function start(args) {
+    const policies = createWorkPolicyStore(dataDir), workPolicy = args.workPolicy ? policies.get(args.workPolicy.id) : null;
+    policies.assertDispatch(workPolicy);
+    if (workPolicy) {
+      policies.assertMain(workPolicy, args.initialSelection);
+      if (workPolicy.configuration.mode === "intelligent" && ["hq", "max_hq"].includes(workPolicy.configuration.smartPreset))
+        throw new Error("HQ/MaxHQ need native coordination with an independent review chat");
+    }
     if (args.surface && args.surface !== "codex") throw new Error("This queue requires a local Codex thread. Normal Chat/ChatGPT Work need their own adapter; use tfo_connection_check first. No queue was armed.");
     if (!THREAD_ID.test(args.threadId || "")) throw new Error("threadId must identify this Codex chat");
     if (!args.startPaused && !startSupervisor && verifyHook) await verifyHook(args.threadId);
@@ -110,28 +121,34 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
     const steps = args.steps.map((item, index) => {
       const prompt = String(item.prompt || "").trim();
       if (!prompt || prompt.length > 32000) throw new Error("Each prompt must contain 1 to 32000 characters");
-      const selection = validateSelection(item.selection);
-      assertQueueSelection(selection, initial, authorizedSelections);
-      if (args.allowPlannedIncreases !== true) assertNotHigher(selection, previous);
+      const decision = workPolicy ? policies.decision(workPolicy, item) : null;
+      const selection = decision?.selected || validateSelection(item.selection);
+      if (!workPolicy) {
+        assertQueueSelection(selection, initial, authorizedSelections);
+        if (args.allowPlannedIncreases !== true) assertNotHigher(selection, previous);
+      }
       previous = selection;
       if (item.expectedResponse != null && (typeof item.expectedResponse !== "string" || !item.expectedResponse.trim())) throw new Error("expectedResponse must be non-empty text when supplied");
       return { id: `step-${index + 1}`, title: String(item.title || `Prompt ${index + 1}`), prompt, selection,
+        ...(decision ? { decision, normalSelection: decision.normalSelection, selectionReason: decision.reason, policyRevision: workPolicy.revision } : {}),
         expectedResponse: item.expectedResponse?.trim() ?? null,
         // The wire prompt is persisted before the model returns control. No self-continuation instructions.
         visiblePrompt: `[Enviado por TFO · cola ${id} · paso ${index + 1}/${args.steps.length}]  ${prompt.replace(/[\r\n]+/g, "  ")}` };
     });
     const maxTurnMinutes = args.maxTurnMinutes ?? 60;
     if (!Number.isInteger(maxTurnMinutes) || maxTurnMinutes < 1 || maxTurnMinutes > 1440) throw new Error("maxTurnMinutes must be between 1 and 1440");
-    const state = { id, kind: "prompt_queue", surface: "codex", version: "1.0.0-rc.2", objective: args.objective, projectPath,
+    const state = { id, kind: "prompt_queue", surface: "codex", version: "1.0.0-rc.3", objective: args.objective, projectPath,
+      ...(workPolicy ? { workPolicy: { id: workPolicy.id, configuration: workPolicy.configuration } } : {}),
       threadId: args.threadId, steps, currentIndex: 0, status: args.startPaused === true ? "paused" : "pending",
       resumeStatus: args.startPaused === true ? "pending" : null, pendingSourceTurnId: host.lastTurnId,
       pendingSourceUserMessageCount: host.userMessageCount ?? null,
       hostObservationVersion: host.observationVersion ?? null,
       dispatch: null, completedSteps: [], error: "", startedAt: stamp(), updatedAt: stamp(), waitingSince: stamp(),
-      authorization: { initialSelection: initial, authorizedSelections, allowPlannedIncreases: args.allowPlannedIncreases === true, deliveryMode },
+      authorization: { initialSelection: initial, authorizedSelections: workPolicy ? steps.map(step => step.selection) : authorizedSelections,
+        allowPlannedIncreases: workPolicy ? true : args.allowPlannedIncreases === true, deliveryMode },
       maxTurnMinutes, supervisor: { status: "awaiting_stop", ownerPid: null, lastStopTurnId: null } };
     // There may only be one live dispatcher for this chat, including compatible older routes.
-    reserveChatSlot(runs, args.threadId, () => save(state));
+    reserveChatSlot(runs, args.threadId, () => { if (workPolicy) policies.bind(workPolicy.id, id); save(state); });
     return activate(state);
   }
 
@@ -289,11 +306,27 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
       });
     }
     if (state.status !== "pending") return view(state);
+    const policies = createWorkPolicyStore(dataDir);
+    let policy;
+    try { policy = policies.assertDispatch(state.workPolicy); }
+    catch (error) { return view(change(id, latest => { latest.policyWaiting = error.message; })); }
     // Reserve one durable attempt before the external side effect. Duplicate ticks cannot reserve it.
     let reserved = false;
     state = change(id, latest => {
       if (latest.status !== "pending" || latest.pendingSourceTurnId !== expected) return;
       const step = latest.steps[latest.currentIndex];
+      try {
+        policy = policies.assertDispatch(latest.workPolicy);
+        if (policy?.configuration.mode === "intelligent" && ["hq", "max_hq"].includes(policy.configuration.smartPreset)) throw new Error("HQ/MaxHQ require an independent native review chat");
+        if (policy) for (const pending of latest.steps.slice(latest.currentIndex)) {
+          if (pending.policyRevision === policy.revision) continue;
+          const decision = policies.decision(policy, pending);
+          Object.assign(pending, { selection: decision.selected, decision, policyRevision: policy.revision });
+          latest.authorization.authorizedSelections.push(decision.selected);
+        }
+        assertWorkBudget(policy, latest, host);
+      } catch (error) { latest.policyWaiting = error.message; return; }
+      delete latest.policyWaiting;
       latest.dispatch = { stepId: step.id, prompt: step.visiblePrompt, requested: step.selection, sourceTurnId: expected,
         attemptId: crypto.randomUUID(), ownerPid: process.pid, sending: true, attemptedAt: stamp() };
       latest.status = "dispatching"; reserved = true;
@@ -307,6 +340,8 @@ export function createPromptQueue({ dataDir, readHost, readReceipt, findPromptTu
       }
       const current = read(id);
       if (current.status !== "dispatching" || current.dispatch.attemptId !== attemptId) return view(current);
+      try { policies.assertDispatch(current.workPolicy); }
+      catch (error) { error.deliveryStage = "before_send"; error.sendAttempted = false; throw error; }
       const messageId = await dispatch(state.threadId, state.dispatch.prompt, state.dispatch.requested, {
         sourceTurnId: expected, runId: id, dataDir, projectPath: state.projectPath,
         ceiling: state.authorization.initialSelection, allowUpgrades: state.authorization.allowPlannedIncreases,

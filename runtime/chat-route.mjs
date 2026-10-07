@@ -5,12 +5,16 @@ import { validateSelection, validateAssessment, decideModel } from "./model-poli
 import { createSettingsStore } from "./settings.mjs";
 import { estimateRouteBudget, equivalentUsd, normalizeUsage } from "./budget.mjs";
 import { reserveChatSlot } from "./prompt-queue.mjs";
+import { replaceAtomicFile } from "./atomic-file.mjs";
+import { createWorkPolicyStore } from "./work-policy.mjs";
+import { assertWorkBudget } from "./work-budget.mjs";
 
 const timestamp = () => new Date().toISOString();
 const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RUN_ID = /^chat_[a-z0-9_]+$/;
 
 export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserved, readMetrics, getSettings = createSettingsStore(dataDir).read, deferDispatch = false }) {
+  const policies = createWorkPolicyStore(dataDir);
   const runsDir = path.join(dataDir, "runs");
   fs.mkdirSync(runsDir, { recursive: true });
   const fileFor = id => path.join(runsDir, id, "state.json");
@@ -48,7 +52,7 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
     state.updatedAt = timestamp();
     const temp = path.join(dir, `state.${process.pid}.${crypto.randomBytes(3).toString("hex")}.tmp`);
     fs.writeFileSync(temp, JSON.stringify(state, null, 2), "utf8");
-    fs.renameSync(temp, fileFor(state.id));
+    replaceAtomicFile(temp, fileFor(state.id));
   };
   const view = state => ({
     id: state.id, kind: state.kind, objective: state.objective,
@@ -87,7 +91,9 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
       try {
         if (!latest.execution) throw new Error("This older route has no explicit model ceiling. Review it before starting another step.");
         const step = latest.steps[latest.currentIndex];
-        const options = getSettings();
+        const work = policies.assertDispatch(latest.workPolicy);
+        if (work?.configuration.mode === "intelligent" && ["hq", "max_hq"].includes(work.configuration.smartPreset)) throw new Error("HQ/MaxHQ require an independent native review chat");
+        const options = work?.configuration || getSettings();
         if (latest.time) {
           const elapsed = (Date.now() - Date.parse(latest.startedAt)) / 60000;
           latest.time = { ...latest.time, elapsedMinutes: Math.round(elapsed), progressPercent: Math.min(100, Math.round(elapsed / latest.time.targetMinutes * 100)) };
@@ -96,7 +102,18 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
             save(latest); return latest;
           }
         }
-        const decision = decideModel({ ...latest.execution, assessment: step.assessment, settings: options });
+        const decision = work ? { ...policies.decision(work, { ...step, normalSelection: step.normalSelection || step.assessment?.recommendation || latest.execution.current,
+          selection: step.assessment?.recommendation, selectionReason: step.selectionReason || step.assessment?.reason }, latest.execution.current), allowUpgrades: true }
+          : decideModel({ ...latest.execution, assessment: step.assessment, settings: options });
+        if (work) {
+          Object.assign(step, { decision, selection: decision.selected, normalSelection: decision.normalSelection, policyRevision: work.revision });
+          const pending = latest.steps.map((item, index) => {
+            if (index <= latest.currentIndex) return item;
+            const selection = policies.decision(work, { ...item, selection: item.assessment?.recommendation || item.selection });
+            return { ...item, selection: selection.selected };
+          });
+          latest.workBudget = assertWorkBudget(work, { ...latest, steps: pending }, metrics);
+        }
         if (latest.budget) {
           if (!metrics || !Number.isFinite(metrics.weeklyUsedPercent)) throw new Error("Weekly usage is unavailable; review the route before another dispatch.");
           if (metrics.weeklyUsedPercent >= options.maxWeeklyUsedPercent) throw new Error("Weekly usage limit reached; no further prompt was sent.");
@@ -114,7 +131,7 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
         latest.dispatch = { stepId: step.id, sending: true, ownerPid: process.pid, requested: decision.selected, prompt: promptFor(latest),
           sourceTurnId, attemptedAt: timestamp() };
         reserved = true;
-      } catch (error) { latest.status = "needs_review"; latest.error = String(error.message || error); }
+      } catch (error) { latest.status = error.code === "TFO_POLICY_PENDING" ? "paused" : "needs_review"; latest.error = String(error.message || error); }
       save(latest);
       return latest;
     });
@@ -123,6 +140,7 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
     try {
       const delivery = await dispatch(state.threadId, state.dispatch.prompt, state.execution.current, {
         ceiling: state.execution.ceiling, allowUpgrades: state.modelDecisions.at(-1).allowUpgrades,
+        authorizedSelections: state.workPolicy ? [state.execution.current] : [],
         runId: state.id, dataDir, projectPath: state.projectPath,
         sourceTurnId,
       });
@@ -178,10 +196,17 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
       const prompt = String(step?.prompt || "").trim();
       if (!title || !prompt) throw new Error(`steps[${index}] requires title and prompt`);
       if (step.expectedOutputTokens != null && (!Number.isInteger(step.expectedOutputTokens) || step.expectedOutputTokens < 1 || step.expectedOutputTokens > 100000)) throw new Error(`steps[${index}].expectedOutputTokens is invalid`);
-      return { id: `step-${index + 1}`, title, prompt, assessment: validateAssessment(step.assessment), expectedOutputTokens: step.expectedOutputTokens || 2048 };
+      return { id: `step-${index + 1}`, title, prompt, assessment: validateAssessment(step.assessment), expectedOutputTokens: step.expectedOutputTokens || 2048,
+        ...(step.normalSelection ? { normalSelection: validateSelection(step.normalSelection) } : {}), selectionReason: step.selectionReason };
     });
   }
   async function start(args) {
+    const workPolicy = args.workPolicy ? policies.get(args.workPolicy.id) : null;
+    policies.assertDispatch(workPolicy);
+    if (workPolicy) {
+      policies.assertMain(workPolicy, args.initialSelection);
+      if (workPolicy.configuration.mode === "intelligent" && ["hq", "max_hq"].includes(workPolicy.configuration.smartPreset)) throw new Error("HQ/MaxHQ need native coordination with an independent review chat");
+    }
     const objective = String(args?.objective || "").trim();
     if (objective.length < 3) throw new Error("objective must contain at least 3 characters");
     if (!THREAD_ID.test(args?.threadId || "")) throw new Error("threadId must be a Codex task UUID");
@@ -191,9 +216,14 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
     const steps = validateSteps(args.steps);
     const initial = validateSelection(args.initialSelection);
     if (verifyInitial) await verifyInitial(args.threadId, initial);
-    const options = getSettings();
+    const options = workPolicy?.configuration || getSettings();
+    if (workPolicy) for (const step of steps) {
+      const decision = policies.decision(workPolicy, { ...step, normalSelection: step.normalSelection || step.assessment?.recommendation || initial,
+        selection: step.assessment?.recommendation, selectionReason: step.selectionReason || step.assessment?.reason }, initial);
+      Object.assign(step, { decision, normalSelection: decision.normalSelection, selection: decision.selected, policyRevision: workPolicy.revision });
+    }
     let budget = null;
-    if (args.enforceBudget) {
+    if (args.enforceBudget && !workPolicy) {
       const metrics = readMetrics ? await readMetrics(args.threadId) : null;
       if (!metrics || !Number.isFinite(metrics.weeklyUsedPercent)) throw new Error("Weekly usage is unavailable; budgeted route cannot start.");
       if (metrics.weeklyUsedPercent >= options.maxWeeklyUsedPercent) throw new Error("Weekly usage limit reached; route not started.");
@@ -206,7 +236,8 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
     if (deferDispatch && !sourceTurn?.lastTurnId) throw new Error("Cannot identify the current host turn; no route was started.");
     const state = {
       id: `chat_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`,
-      kind: "chat", version: "1.0.0-rc.2", objective, projectPath, budget,
+      kind: "chat", version: "1.0.0-rc.3", objective, projectPath, budget,
+      ...(workPolicy ? { workPolicy: { id: workPolicy.id, configuration: workPolicy.configuration } } : {}),
       time: args.enforceBudget ? { mode: options.timeMode, targetMinutes: options.targetMinutes, extraMinutes: options.extraMinutes,
         elapsedMinutes: 0, progressPercent: 0, approximate: true } : null,
       execution: { current: initial, ceiling: initial }, modelDecisions: [],
@@ -215,7 +246,8 @@ export function createChatRouter({ dataDir, dispatch, verifyInitial, readObserve
       pendingSourceTurnId: deferDispatch ? sourceTurn.lastTurnId : null,
       error: "", startedAt: timestamp(), updatedAt: timestamp(),
     };
-    reserveChatSlot(runsDir, args.threadId, () => save(state));
+    if (workPolicy) state.workBudget = assertWorkBudget(workPolicy, state, sourceTurn || (readMetrics ? await readMetrics(args.threadId) : null));
+    reserveChatSlot(runsDir, args.threadId, () => { if (workPolicy) policies.bind(workPolicy.id, state.id); save(state); });
     return deferDispatch ? view(state) : dispatchCurrent(state.id);
   }
   async function complete(args) {

@@ -1,15 +1,15 @@
 {
   "name": "tfo",
-  "version": "1.0.0-rc.2+codex.sol61.1",
+  "version": "1.0.0-rc.3+codex.1",
   "description": "TaskFlow Orchestrator for supervised local Codex chat flows, dependencies, queues, and verified results.",
   "author": {
     "name": "Wice Games / local development"
   },
   "skills": "./skills/",
   "interface": {
-    "displayName": "TFO \u00b7 TaskFlow Orchestrator",
-    "shortDescription": "Chats paralelos, dependencias y resultados reunidos.",
-    "longDescription": "TFO coordina tareas y dependencias en chats locales de Codex. La IA propone modelo y esfuerzo por tarea, incluido el principal; TFO verifica los recibos. El retorno con otra selecci\u00f3n usa un adaptador de interfaz con controles de destino y env\u00edo \u00fanico. RC para aceptaci\u00f3n en Windows. ChatGPT Projects requiere otro adaptador.",
+    "displayName": "TFO · TaskFlow Orchestrator",
+    "shortDescription": "Coordina chats y resultados",
+    "longDescription": "Coordina chats, encadena prompts y reúne resultados. Inteligente elige modelo y potencia por tarea; Custom los fija. Opciones de uso y permisos por trabajo. Instalación nueva: Automático, Permitir siempre e Inteligente Normal. Dos auxiliares simultáneos por defecto. Candidato para Windows/Codex local.",
     "developerName": "Wice Games / local development",
     "category": "Productivity",
     "capabilities": [
@@ -17,9 +17,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Organiza este proyecto en tareas paralelas con TFO y re\u00fane los resultados en este chat.",
+      "Organiza este proyecto en tareas paralelas con TFO y reúne los resultados en este chat.",
       "Coordina dos cadenas de tareas dependientes y luego integra el proyecto.",
-      "Abre las opciones de ahorro de TFO."
+      "Abre las opciones de modos y permisos de TFO."
     ]
   },
   "mcpServers": "./.mcp.json"

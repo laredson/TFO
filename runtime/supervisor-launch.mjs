@@ -4,10 +4,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { publishSnapshot } from "./snapshot-publish.mjs";
 
-export const supervisorFiles = ["queue-supervisor.mjs", "prompt-queue.mjs", "model-policy.mjs", "host-selection.mjs",
+export const supervisorFiles = ["queue-supervisor.mjs", "prompt-queue.mjs", "model-policy.mjs", "host-selection.mjs", "smart-policy.mjs", "work-policy.mjs", "settings.mjs", "work-budget.mjs", "budget.mjs",
   "queue-transport.mjs", "ui-send-guard.mjs", "ui-bridge.ps1", "project-host.mjs",
-  "project-workspace.mjs", "project-reservations.mjs", "selected-join-adapter.mjs"];
+  "project-workspace.mjs", "project-reservations.mjs", "selected-join-adapter.mjs", "snapshot-publish.mjs", "atomic-file.mjs"];
 export function snapshotSupervisor(dataDir, sourceDir = path.dirname(fileURLToPath(import.meta.url))) {
   const contents = supervisorFiles.map(name => [name, fs.readFileSync(path.join(sourceDir, name))]);
   const digest = crypto.createHash("sha256");
@@ -19,8 +20,7 @@ export function snapshotSupervisor(dataDir, sourceDir = path.dirname(fileURLToPa
   if (!fs.existsSync(root)) {
     const temp = fs.mkdtempSync(path.join(parent, "staging-"));
     for (const [name, bytes] of contents) fs.writeFileSync(path.join(temp, name), bytes, {flag:"wx"});
-    try { fs.renameSync(temp, root); }
-    catch (error) { if (!fs.existsSync(root)) throw error; }
+    publishSnapshot(temp, root);
   }
   for (const [name, bytes] of contents) {
     if (!fs.readFileSync(path.join(root, name)).equals(bytes)) throw new Error("Supervisor snapshot integrity check failed");

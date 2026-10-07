@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { validateSelection } from "./model-policy.mjs";
 import { createProjectReservationStore } from "./project-reservations.mjs";
+import { replaceAtomicFile } from "./atomic-file.mjs";
 
 const stamp = () => new Date().toISOString();
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/;
@@ -135,7 +136,7 @@ export function createProjectCoordinator({ dataDir, adapter = unavailableProject
     state.updatedAt = stamp();
     const tmp = `${file(state.id)}.${process.pid}.${crypto.randomUUID()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(state, null, 2), { flag: "wx" });
-    fs.renameSync(tmp, file(state.id));
+    replaceAtomicFile(tmp, file(state.id));
     return state;
   };
   const summary = state => ({ id: state.id, objective: state.objective, projectPath: state.projectPath,

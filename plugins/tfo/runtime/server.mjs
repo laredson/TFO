@@ -24,8 +24,15 @@ import { launchProjectSupervisor } from "./project-supervisor.mjs";
 import { projectFlowTools } from "./project-flow-tools.mjs";
 import { createNativeFlow } from "./native-flow.mjs";
 import { nativeFlowTools } from "./native-flow-tools.mjs";
+import { launchNativeCoordinator, restoreNativeCoordinators } from "./native-coordinator-supervisor.mjs";
+import { replaceAtomicFile } from "./atomic-file.mjs";
+import { prepareWorkEntry } from "./work-entry.mjs";
+import { workPolicyProperties, SMART_MODELS, PRESET_GUIDANCE } from "./smart-policy.mjs";
+import { settingsCapability, nativeSettingsTools, readNativeSettings, updateNativeSettings } from "./native-settings.mjs";
+import { createWorkPolicyStore } from "./work-policy.mjs";
+import { exportMeasurements } from "./measurements.mjs";
 
-const VERSION = "1.0.0-rc.2";
+const VERSION = "1.0.0-rc.3";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(process.env.TFO_DATA_DIR || path.join(process.env.LOCALAPPDATA || os.homedir(), "TFO", "data"));
 const RUNS_DIR = path.join(DATA_DIR, "runs");
@@ -52,6 +59,7 @@ const promptQueue = createPromptQueue({ dataDir: DATA_DIR, readHost: readHostTur
 const projectCoordinator = createProjectCoordinator({ dataDir: DATA_DIR });
 const projectFlow = createProjectFlow({ dataDir: DATA_DIR, host: nativeProjectHost, launch: id => launchProjectSupervisor(DATA_DIR, id) });
 const nativeFlow = createNativeFlow({ dataDir: DATA_DIR, host: nativeProjectHost });
+const nativeResponse = state => state.coordinationMode === "active_main" ? nativeFlow.compact(state.id) : state;
 projectCoordinator.recover();
 
 function now() { return new Date().toISOString(); }
@@ -65,7 +73,7 @@ function saveState(state) {
   fs.mkdirSync(dir, { recursive: true });
   const temporary = path.join(dir, `state.${process.pid}.tmp`);
   fs.writeFileSync(temporary, JSON.stringify(state, null, 2), "utf8");
-  fs.renameSync(temporary, stateFile(state.id));
+  replaceAtomicFile(temporary, stateFile(state.id));
 }
 function loadState(id) {
   if (!/^[a-z0-9_-]{8,80}$/i.test(id)) return null;
@@ -165,6 +173,7 @@ async function runLoop(id) {
       while (true) {
         let state = loadState(id);
         if (!state || state.status !== "running") break;
+        createWorkPolicyStore(DATA_DIR).assertDispatch(state.workPolicy);
         if (state.currentIndex >= state.steps.length) {
           state.status = "completed"; state.updatedAt = now(); saveState(state); break;
         }
@@ -203,6 +212,7 @@ async function runLoop(id) {
   return task;
 }
 function startRoute(args) {
+  createWorkPolicyStore(DATA_DIR).assertDispatch(null);
   if (typeof args.objective !== "string" || args.objective.trim().length < 3) throw new Error("objective must contain at least 3 characters");
   if (typeof args.projectPath !== "string" || !args.projectPath.trim()) throw new Error("projectPath is required");
   const projectPath = fs.realpathSync(path.resolve(args.projectPath));
@@ -291,7 +301,7 @@ const tools = [
     description: `${action} or inspect a stored project DAG. This does not enable the unavailable host adapter or dispatch prompts.`,
     inputSchema: { type: "object", required: ["runId"], additionalProperties: false, properties: { runId: { type: "string" } } } })),
   { name: "tfo_project_recover", description: "Mark project plans interrupted during a coordinator restart as needs_review; never resends a node.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
-  { name: "tfo_start", description: "Start a route only after the user has reviewed and approved its objective, steps, models, reasoning, and project scope. Each step runs as a bounded Codex CLI worker in workspace-write mode and writes a persistent checkpoint.", inputSchema: {
+  { name: "tfo_start", description: "Retired legacy creation entry. Use tfo_native_prepare or tfo_queue_start for new policy-aware work. Existing runs retain status/pause/resume/cancel tools.", inputSchema: {
     type: "object", additionalProperties: false,
     required: ["objective", "projectPath", "steps"],
     properties: {
@@ -337,23 +347,73 @@ const tools = [
   { name: "tfo_chat_resume", description: "Resume a paused chat route without duplicating an already queued prompt.", inputSchema: { type: "object", required: ["runId"], additionalProperties: false, properties: { runId: { type: "string" } } } },
   { name: "tfo_chat_cancel", description: "Cancel a chat route. No further step is queued; an already queued prompt cannot be recalled.", inputSchema: { type: "object", required: ["runId"], additionalProperties: false, properties: { runId: { type: "string" } } } },
   { name: "tfo_settings", description: "Read economy settings and supported model levels. Changes are made by the user in Options; upgrades are disabled by default.", inputSchema: { type: "object", additionalProperties: false, properties: {} } },
-  { name: "tfo_options", description: "Open the local Options menu for savings and upgrade permissions. Returns a private local URL to show in a browser panel. Do not confirm the upgrade warning on the user's behalf.", inputSchema: { type: "object", additionalProperties: false, properties: {} } },
+  { name: "tfo_options", description: "Open TFO Options for Intelligent/Custom modes, use choices and scoped permissions. Returns a private local URL. Only the human grants permissions; do not operate Allow on their behalf.", inputSchema: { type: "object", additionalProperties: false, properties: {} } },
 ];
 
+for (const tool of tools.filter(item => ["tfo_queue_start", "tfo_chat_start", "tfo_budgeted_chat_start"].includes(item.name))) {
+  Object.assign(tool.inputSchema.properties, workPolicyProperties);
+  const item = tool.inputSchema.properties.steps?.items;
+  if (item?.properties) { item.properties.normalSelection = selectionSchema; item.properties.selectionReason = { type: "string" }; }
+}
+tools.push({ name: "tfo_work_prepare", description: "Prepare this work's mode and usage/permission choices without dispatch. Reuse returned workId when starting the native flow or queue. Pending permission is approved by the human in Options.",
+  inputSchema: { type: "object", additionalProperties: false, required: ["threadId", "projectPath", "objective"], properties: {
+    threadId: { type: "string" }, projectPath: { type: "string" }, objective: { type: "string" }, ...workPolicyProperties } } });
+
+tools.push(...nativeSettingsTools);
+tools.push({ name: "tfo_measurements", description: "Export stored run measurements without prompts, responses or workspace paths. Missing quality, quota and usage stay null; API equivalent is separate from subscription quota.", annotations: { readOnlyHint: true },
+  inputSchema: { type: "object", additionalProperties: false, required: ["runId"], properties: { runId: { type: "string" } } } });
 function toolResult(value) {
   return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
 }
 async function callTool(name, args = {}) {
+  if (["tfo_start", "tfo_project_prepare", "tfo_parallel_prepare"].includes(name)) throw new Error("This legacy entry point cannot create new work with version 3 policy. Use tfo_native_prepare for project flows or tfo_queue_start for one chat. Existing saved runs retain their controls.");
+  if (name === "tfo_settings_read") return readNativeSettings(DATA_DIR);
+  if (name === "tfo_measurements") return exportMeasurements(DATA_DIR, args.runId);
+  if (name === "tfo_settings_update") return updateNativeSettings(DATA_DIR, args.set);
+  if (name === "tfo_queue_start" && args.surface && args.surface !== "codex") throw new Error("This queue requires local Codex. No queue was armed.");
+  if (["tfo_native_prepare", "tfo_queue_start", "tfo_chat_start", "tfo_budgeted_chat_start", "tfo_work_prepare"].includes(name)) {
+    const entry = await prepareWorkEntry(DATA_DIR, args);
+    if (entry.pending) return entry.pending;
+    if (name === "tfo_work_prepare") return { status: "ready", workId: entry.work.id, configuration: entry.work.configuration };
+    args = entry.args;
+  }
   switch (name) {
-    case "tfo_native_prepare": return nativeFlow.prepare(args);
+    case "tfo_native_prepare": {
+      const state = await nativeFlow.prepare(args);
+      if (state.coordinationMode !== "active_main") return state;
+      try {
+        const supervisor = await launchNativeCoordinator(DATA_DIR, state.id);
+        return { ...nativeFlow.compact(state.id), supervisor };
+      } catch (error) {
+        nativeFlow.fail(state.id, `Coordinator observation startup failed: ${error.message}`);
+        throw error;
+      }
+    }
     case "tfo_native_claim": return nativeFlow.claim(args.runId, args.nodeId);
-    case "tfo_native_acknowledge": return nativeFlow.acknowledge(args.runId, args.nodeId, args.threadId);
-    case "tfo_native_observe": return nativeFlow.observe(args.runId);
-    case "tfo_native_status": return nativeFlow.status(args.runId);
+    case "tfo_native_acknowledge": {
+      return nativeResponse(await nativeFlow.acknowledge(args.runId, args.nodeId, args.threadId, args.workspace));
+    }
+    case "tfo_native_observe": return nativeResponse(await nativeFlow.observe(args.runId));
+    case "tfo_native_status": return nativeResponse(nativeFlow.status(args.runId));
     case "tfo_native_fail": return nativeFlow.fail(args.runId, args.reason);
+    case "tfo_native_wait": return nativeFlow.wait(args.runId, args);
+    case "tfo_native_results": return nativeFlow.results(args.runId, args);
+    case "tfo_native_defer_dispatch": await nativeFlow.deferDispatch(args.runId, args.nodeId, args.hostEvidence); return nativeFlow.compact(args.runId);
+    case "tfo_native_revise": await nativeFlow.revise(args.runId, args); return nativeFlow.compact(args.runId);
+    case "tfo_native_checkpoint": await nativeFlow.checkpoint(args.runId, args); return nativeFlow.compact(args.runId);
+    case "tfo_native_finish": return nativeFlow.finish(args.runId, args);
+    case "tfo_native_pause": nativeFlow.pause(args.runId); return nativeFlow.compact(args.runId);
+    case "tfo_native_resume": {
+      await nativeFlow.resume(args.runId);
+      const supervisor = await launchNativeCoordinator(DATA_DIR, args.runId);
+      return { ...nativeFlow.compact(args.runId), supervisor };
+    }
+    case "tfo_native_cancel": await nativeFlow.cancel(args.runId); return nativeFlow.compact(args.runId);
+    case "tfo_native_reconcile": await nativeFlow.reconcile(args.runId); return nativeFlow.compact(args.runId);
+    case "tfo_native_recover": await nativeFlow.recover(args.runId); return nativeFlow.compact(args.runId);
     case "tfo_connection_check":
     case "tfo_connection_panel": return connectionCheck(args.surface);
-    case "tfo_health": return { ok: true, name: "TFO", version: VERSION, dataDir: DATA_DIR, workerCommand: codexCommand(), features: ["surface-connection-diagnostics", "mcp-apps-diagnostic-panel", "stored-prompt-queue", "acknowledged-supervisor", "immutable-runtime-snapshot", "automatic-turn-receipts", "pending-after-turn", "uncertain-send-reconciliation", "desktop-access-diagnostic", "host-model-catalog", "budget", "time-options", "persistent-project-dag", "project-plan-recovery", "native-chat-provisioning", "parallel-dependency-supervisor", "joined-main-handoffs", "verified-git-worktrees", "bundled-bootstrap"], limitation: "tfo_parallel_* coordinates local Codex chats provisioned with native app tools, preserves selection, and verifies receipts/worktrees. The old tfo_project_* planner remains storage-only. ChatGPT Project creation and automatic delivery still require a separate adapter. Worker reports do not replace integration tests; uncertain sends never retry." };
+    case "tfo_health": return { ok: true, name: "TFO", version: VERSION, dataDir: DATA_DIR, workerCommand: codexCommand(), features: ["smart-modes", "settings-v3", "scoped-permissions", "native-settings-extension", "measurement-export", "surface-connection-diagnostics", "mcp-apps-diagnostic-panel", "stored-prompt-queue", "acknowledged-supervisor", "immutable-runtime-snapshot", "automatic-turn-receipts", "pending-after-turn", "uncertain-send-reconciliation", "desktop-access-diagnostic", "host-model-catalog", "budget", "time-options", "persistent-project-dag", "project-plan-recovery", "native-chat-provisioning", "parallel-dependency-supervisor", "joined-main-handoffs", "verified-git-worktrees", "bundled-bootstrap", "active-main-coordination", "parallelism-1-to-100", "cursor-event-wait", "bounded-principal-recovery"], limitation: "Native active_main coordinates and integrates through the principal; TFO observes and recovers verified inactive failures at most three times. One MCP recovery after premature completion has a real final receipt. Queue access is checked before recovery; a sandboxed CLI may lack host write access. Native Git bootstraps and other failure scenarios need live acceptance. The configured cap is not host capacity. Legacy deferred flows retain their transport. ChatGPT delivery still needs an adapter; uncertain sends never retry." };
     case "tfo_ui_diagnostic": return diagnoseDesktopAccess();
     case "tfo_queue_start": return promptQueue.start(args);
     case "tfo_queue_status": return promptQueue.recover(args.runId);
@@ -366,6 +426,7 @@ async function callTool(name, args = {}) {
     case "tfo_parallel_pause": return projectFlow.pause(args.runId);
     case "tfo_parallel_resume": return projectFlow.resume(args.runId);
     case "tfo_parallel_cancel": return projectFlow.cancel(args.runId);
+    case "tfo_parallel_set_parallelism": return projectFlow.setParallelism(args.runId, args.maxParallelWorkers, args.explicitUserIncrease === true);
     case "tfo_project_status": return projectCoordinator.status(args.runId);
     case "tfo_project_pause": return projectCoordinator.pause(args.runId);
     case "tfo_project_resume": return projectCoordinator.resume(args.runId);
@@ -374,7 +435,7 @@ async function callTool(name, args = {}) {
     case "tfo_queue_pause": return promptQueue.pause(args.runId);
     case "tfo_queue_cancel": return promptQueue.cancel(args.runId);
     case "tfo_queue_resume": return promptQueue.resume(args.runId);
-    case "tfo_settings": return { ...settings.read(), defaultSolModel: DEFAULT_SOL_MODEL, models: MODEL_REGISTRY, efforts: VALID_EFFORTS };
+    case "tfo_settings": return { ...settings.read(), defaultSolModel: DEFAULT_SOL_MODEL, models: MODEL_REGISTRY, smartModelIds: SMART_MODELS, efforts: VALID_EFFORTS, presets: PRESET_GUIDANCE };
     case "tfo_options": return launchOptions(DATA_DIR);
     case "tfo_start": return publicState(startRoute(args));
     case "tfo_get_status": {
@@ -429,7 +490,7 @@ async function handle(message) {
       case "initialize": {
         const requested = params.protocolVersion;
         negotiatedProtocol = SUPPORTED_PROTOCOLS.has(requested) ? requested : "2025-06-18";
-        return response(id, { protocolVersion: negotiatedProtocol, capabilities: { tools: { listChanged: false }, resources: { listChanged: false } }, serverInfo: { name: "tfo", version: VERSION }, instructions: "TFO stores authorized prompt queues. First check tfo_connection_check for the actual product. Normal Chat support is diagnostic only; never reinterpret a ChatGPT conversation as a Codex thread or claim automatic delivery. Inspect project scope and approval before tfo_start." });
+        return response(id, { protocolVersion: negotiatedProtocol, capabilities: { tools: { listChanged: false }, resources: { listChanged: false }, experimental: { "openai/settings": settingsCapability } }, serverInfo: { name: "tfo", version: VERSION }, instructions: "TFO coordinates authorized work using saved Intelligent/Custom settings. Read tfo_settings; use tfo_work_prepare when a use choice or permission is pending. Verify the actual host and every turn receipt. Never retry uncertain sends. Use native active coordination for new project work and HQ/MaxHQ." });
       }
       case "ping": return response(id, {});
       case "tools/list": return response(id, { tools });
@@ -449,6 +510,7 @@ async function handle(message) {
 }
 
 recoverInterruptedRuns();
+restoreNativeCoordinators(DATA_DIR).catch(error => process.stderr.write(`TFO coordinator restoration: ${error.message}\n`));
 const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
 input.on("line", async line => {
   let request;

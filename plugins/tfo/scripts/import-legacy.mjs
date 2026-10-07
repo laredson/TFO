@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { publishSnapshot } from "../runtime/snapshot-publish.mjs";
 
 const usage = "Usage: node scripts/import-legacy.mjs --source-data-dir <existing legacy data> --target-data-dir <new TFO data>";
 function arg(name) {
@@ -31,7 +32,8 @@ function validateSettings(raw) {
   for (const [key, min, max] of [["targetMinutes", 5, 10080], ["extraMinutes", 0, 1440]]) {
     if (!Number.isInteger(raw[key]) || raw[key] < min || raw[key] > max) fail(`invalid ${key}`);
   }
-  const keys = ["version", "profile", "economyEnabled", "allowUpgrades", "upgradeAcceptedAt", "upgradeCeiling", "maxCostMultiplier", "maxEstimatedUsd", "maxWeeklyUsedPercent", "timeMode", "targetMinutes", "extraMinutes", "updatedAt"];
+  if (Object.hasOwn(raw, "maxParallelWorkers") && (!Number.isInteger(raw.maxParallelWorkers) || raw.maxParallelWorkers < 1 || raw.maxParallelWorkers > 100)) fail("invalid maxParallelWorkers");
+  const keys = ["version", "profile", "economyEnabled", "allowUpgrades", "upgradeAcceptedAt", "upgradeCeiling", "maxCostMultiplier", "maxEstimatedUsd", "maxWeeklyUsedPercent", "timeMode", "targetMinutes", "extraMinutes", "maxParallelWorkers", "updatedAt"];
   if (Object.keys(raw).some(key => !keys.includes(key))) fail("unrecognized settings field");
   return raw;
 }
@@ -99,7 +101,7 @@ try {
   fs.cpSync(source, archive, { recursive: true, errorOnExist: true, force: false });
   if (settings) fs.writeFileSync(path.join(stage, "settings.json"), JSON.stringify(settings, null, 2) + "\n", { flag: "wx" });
   fs.writeFileSync(path.join(stage, "migration-archive", "import.json"), JSON.stringify({ format: 1, importedAt: new Date().toISOString(), archivedFiles: files.length, activePromptsImported: 0 }, null, 2) + "\n", { flag: "wx" });
-  fs.renameSync(stage, target);
+  if (!publishSnapshot(stage, target)) fail("target already exists; no merge or overwrite is allowed");
   console.log(JSON.stringify({ status: "completed", target, archivedFiles: files.length, settingsImported: Boolean(settings), activePromptsImported: 0 }));
 } catch (error) {
   const parent = path.resolve(path.dirname(target));

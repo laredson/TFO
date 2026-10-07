@@ -206,3 +206,42 @@ test("a host that ignores the requested downgrade cannot silently continue the c
   assert.match(done.error, /Host model verification failed/);
   assert.equal(f.sent.length, 1);
 });
+
+test("checkpoint publication retries the same staged bytes through transient Windows locks before dispatch", async t => {
+  const f = fixture(t), router = createChatRouter({ dataDir: f.dir, dispatch: f.dispatch }), started = await router.start(f.args);
+  const target = path.join(f.dir, "runs", started.id, "state.json"), previous = fs.readFileSync(target), originalRename = fs.renameSync;
+  let staged, stagedBytes, calls = 0;
+  fs.renameSync = (source, destination) => {
+    if (destination === target && (!staged || source === staged)) {
+      staged ||= source; stagedBytes ||= fs.readFileSync(source); calls++;
+      assert.ok(fs.readFileSync(source).equals(stagedBytes), "each retry publishes the identical checkpoint");
+      if (calls <= 3) {
+        assert.ok(fs.readFileSync(target).equals(previous), "the previous state remains readable until rename succeeds");
+        assert.equal(f.sent.length, 1, "a later prompt cannot precede checkpoint publication");
+        throw Object.assign(new Error("Injected transient state-file lock"), { code: ["EPERM", "EBUSY", "EACCES"][calls - 1] });
+      }
+    }
+    return originalRename(source, destination);
+  };
+  let next;
+  try { next = await router.complete({ runId: started.id, stepId: "step-1", success: true, summary: "Checkpoint safely committed" }); }
+  finally { fs.renameSync = originalRename; }
+  assert.equal(calls, 4); assert.equal(fs.existsSync(staged), false);
+  assert.equal(next.status, "queued"); assert.equal(next.completedSteps[0].summary, "Checkpoint safely committed");
+  assert.equal(f.sent.length, 2); assert.equal(router.getStatus(started.id).completedSteps.length, 1);
+});
+
+test("permanent checkpoint write errors preserve the old state, release its lock and send no later prompt", async t => {
+  for (const code of ["EPERM", "EACCES", "EIO"]) {
+    const f = fixture(t), router = createChatRouter({ dataDir: f.dir, dispatch: f.dispatch }), started = await router.start(f.args);
+    const dir = path.join(f.dir, "runs", started.id), target = path.join(dir, "state.json"), previous = fs.readFileSync(target), originalRename = fs.renameSync;
+    const injected = Object.assign(new Error(`Permanent checkpoint ${code} failure`), { code }); let calls = 0;
+    fs.renameSync = (source, destination) => { if (destination === target) { calls++; throw injected; } return originalRename(source, destination); };
+    try { await assert.rejects(router.complete({ runId: started.id, stepId: "step-1", success: true, summary: "Unsaved checkpoint" }), error => error === injected); }
+    finally { fs.renameSync = originalRename; }
+    assert.equal(calls, code === "EIO" ? 1 : 6); assert.ok(fs.readFileSync(target).equals(previous));
+    const preserved = router.getStatus(started.id);
+    assert.equal(preserved.status, "queued"); assert.equal(preserved.currentIndex, 0); assert.equal(preserved.completedSteps.length, 0);
+    assert.equal(fs.existsSync(path.join(dir, "mutation.lock")), false); assert.equal(f.sent.length, 1);
+  }
+});

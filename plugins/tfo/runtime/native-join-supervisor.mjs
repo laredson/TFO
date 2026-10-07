@@ -23,9 +23,9 @@ export function checkNativeQueueAccess() {
   return { checkedAt: new Date().toISOString(), queueInterface: true, stateAccess: true, messageSent: false };
 }
 
-const files = ["native-join-supervisor.mjs", "native-flow.mjs", "project-host.mjs", "host-selection.mjs", "project-flow.mjs",
-  "project-workspace.mjs", "project-reservations.mjs", "model-policy.mjs", "prompt-queue.mjs", "budget.mjs",
-  "selected-join-adapter.mjs", "queue-transport.mjs", "ui-send-guard.mjs", "ui-bridge.ps1"];
+const files = ["native-join-supervisor.mjs", "native-flow.mjs", "project-host.mjs", "host-selection.mjs", "project-flow.mjs", "smart-policy.mjs", "work-policy.mjs", "review-policy.mjs", "work-budget.mjs",
+  "project-workspace.mjs", "project-reservations.mjs", "model-policy.mjs", "prompt-queue.mjs", "budget.mjs", "settings.mjs",
+  "selected-join-adapter.mjs", "queue-transport.mjs", "ui-send-guard.mjs", "ui-bridge.ps1", "atomic-file.mjs"];
 export function snapshotNativeJoin(dataDir) {
   const source = path.dirname(fileURLToPath(import.meta.url));
   const contents = files.map(file => [file, fs.readFileSync(path.join(source, file))]);

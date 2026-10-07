@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { createProjectFlow, validateFlow } from "../project-flow.mjs";
 import { verifyWorkspace, verifyScratchWorkspace, canonicalPath } from "../project-workspace.mjs";
 import { reserveChatSlot } from "../prompt-queue.mjs";
+import { createSettingsStore } from "../settings.mjs";
 
 const main = "11111111-1111-1111-1111-111111111111", a = "22222222-2222-2222-2222-222222222222", b = "33333333-3333-3333-3333-333333333333", p = "44444444-4444-4444-4444-444444444444";
 const selection = { model: "gpt-6-sol", reasoning: "medium" };
@@ -66,18 +67,64 @@ function fixture(t) {
 
 test("two dependency chains run concurrently and main gets both complete handoffs exactly once", async t => {
   const f = fixture(t), id = await f.prepare();
-  await f.flow.tick(id); assert.deepEqual(f.sent.map(s => s.id), [a, b]);
+  const started = await f.flow.tick(id); assert.deepEqual(f.sent.map(s => s.id), [a, b], started.error || "both ready workers dispatch");
   f.finish(a); await f.flow.tick(id); assert.equal(f.sent.length, 3); assert.match(f.sent[2].prompt, /Implemented and checked/);
   f.finish(a); await f.flow.tick(id); assert.equal(f.sent.length, 3, "must wait for the second branch");
   f.finish(b); await f.flow.tick(id); assert.equal(f.sent.length, 4);
   f.finish(b); await f.flow.tick(id); assert.equal(f.sent.length, 4, "main is still working");
   f.states.get(main).active = false;
-  await f.flow.tick(id); assert.equal(f.sent.length, 5);
+  const joinState = await f.flow.tick(id); assert.equal(f.sent.length, 5, joinState.error || "all workers finished and main is idle");
   assert.match(f.sent[4].prompt, /"node": "a2"/); assert.match(f.sent[4].prompt, /"node": "b2"/);
   assert.match(f.sent[4].prompt, /refs\/heads\/task-a/);
   f.finish(main, "Final integrated deliverable");
   assert.equal((await f.flow.tick(id)).status, "completed");
   await f.flow.tick(id); assert.equal(f.sent.length, 5);
+});
+
+test("new project flows snapshot persistent parallelism and explicit overrides", async t => {
+  const f = fixture(t), settings = createSettingsStore(f.dataDir);
+  settings.update({ maxParallelWorkers: 1 });
+  const id = await f.prepare();
+  assert.equal(f.flow.status(id).maxParallelWorkers, 1);
+  settings.update({ maxParallelWorkers: 100 });
+  await f.flow.tick(id);
+  assert.deepEqual(f.sent.map(item => item.id), [a], "changing defaults must not raise a prepared flow");
+  f.finish(a); await f.flow.tick(id);
+  assert.equal(f.sent.at(-1).id, a, "one worker slot remains enforced across continuations");
+
+  const explicit = fixture(t);
+  createSettingsStore(explicit.dataDir).update({ maxParallelWorkers: 1 });
+  explicit.args.maxParallelWorkers = 2;
+  const overrideId = await explicit.prepare(); await explicit.flow.tick(overrideId);
+  assert.equal(explicit.sent.length, 2);
+});
+
+test("live reductions drain active workers and increases require user authorization", async t => {
+  const f = fixture(t), id = await f.prepare(); await f.flow.tick(id);
+  assert.equal(f.sent.length, 2);
+  f.flow.setParallelism(id, 1);
+  f.finish(a); await f.flow.tick(id);
+  assert.equal(f.sent.length, 2, "the remaining active worker holds the reduced slot");
+  assert.equal(f.states.get(b).active, true, "lowering does not interrupt existing work");
+  f.finish(b); await f.flow.tick(id);
+  assert.equal(f.sent.length, 3);
+  assert.throws(() => f.flow.setParallelism(id, 100), /explicit user/);
+  assert.equal(f.flow.setParallelism(id, 100, true).maxParallelWorkers, 100);
+  await f.flow.tick(id); assert.equal(f.sent.length, 4);
+  for (const value of [0, 101, 1.5]) assert.throws(() => f.flow.setParallelism(id, value), /1-100/);
+});
+
+test("conventional flows preserve deferred execution and old saved worker caps", async t => {
+  const f = fixture(t);
+  await assert.rejects(f.flow.prepare({ ...f.args, coordinationMode: "active_main" }), /native driver/);
+  const id = await f.prepare(), stateFile = path.join(f.dataDir, "parallel", id, "state.json");
+  const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  delete state.maxParallelWorkers; delete state.coordinationMode;
+  fs.writeFileSync(stateFile, JSON.stringify(state));
+  createSettingsStore(f.dataDir).update({ maxParallelWorkers: 1 });
+  await f.flow.tick(id);
+  assert.equal(f.sent.length, 2, "saved flows lacking a cap retain the old capacity up to eight");
+  assert.throws(() => f.flow.setParallelism(id, 9), /explicit user/);
 });
 
 test("main can perform a prerequisite in the preparing turn while workers run", async t => {
@@ -126,6 +173,40 @@ test("an uncertain send persists intent and never retries after a restart", asyn
   const again = createProjectFlow({ dataDir: f.dataDir, host: f.host });
   await again.tick(id); assert.equal(attempts, 1);
   assert.throws(() => again.resume(id), /Cannot resume/);
+});
+
+test("verified capacity rejection retains its audit and safely retries after cooldown", async t => {
+  const f = fixture(t), id = await f.prepare(), send = f.host.send;
+  let attempts = 0;
+  f.host.send = async (...args) => {
+    attempts++;
+    if (attempts === 1) throw Object.assign(new Error("verified host capacity preflight"), { code: "HOST_CAPACITY", deliveryAttempted: false, retryAfterMs: 2500 });
+    return send(...args);
+  };
+  const blocked = await f.flow.tick(id);
+  assert.equal(blocked.status, "running"); assert.equal(blocked.nodes[0].status, "pending");
+  assert.equal(blocked.nodes[0].dispatchAttempts[0].status, "capacity_rejected");
+  assert.equal(blocked.nodes[0].dispatchAttempts[0].deliveryAttempted, false);
+  assert.equal(blocked.maxParallelWorkers, 2);
+  assert.equal(blocked.capacityBackpressure.effectiveMaxParallelWorkers, 1);
+  await f.flow.tick(id); assert.equal(attempts, 1);
+  f.advance(2500); await f.flow.tick(id);
+  assert.equal(attempts, 2); assert.equal(f.sent.length, 1, "reduced effective cap permits one worker");
+  const node = f.flow.status(id).nodes[0];
+  assert.equal(node.dispatchAttempts.length, 2);
+  assert.notEqual(node.dispatchAttempts[0].id, node.dispatchAttempts[1].id);
+  assert.equal(node.dispatchAttempts[1].status, "queued");
+  assert.equal(node.dispatchAttempts[0].promptSha256, node.dispatchAttempts[1].promptSha256);
+});
+
+test("unproven capacity errors retain uncertain delivery without a retry", async t => {
+  for (const error of [new Error("host capacity exceeded"), Object.assign(new Error("capacity"), { code: "HOST_CAPACITY", deliveryAttempted: true })]) {
+    const f = fixture(t), id = await f.prepare(); let attempts = 0;
+    f.host.send = async () => { attempts++; throw error; };
+    assert.equal((await f.flow.tick(id)).status, "needs_review");
+    f.advance(60000); await f.flow.tick(id); assert.equal(attempts, 1);
+    assert.equal(f.flow.status(id).nodes[0].status, "dispatching");
+  }
 });
 
 test("new user activity in main prevents the automatic join prompt", async t => {

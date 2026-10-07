@@ -5,10 +5,11 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createProjectFlow } from "./project-flow.mjs";
 import { nativeProjectHost } from "./project-host.mjs";
+import { publishSnapshot } from "./snapshot-publish.mjs";
 
-const dependencies = ["project-supervisor.mjs", "project-flow.mjs", "project-host.mjs", "project-workspace.mjs",
-  "project-reservations.mjs", "prompt-queue.mjs", "host-selection.mjs", "model-policy.mjs",
-  "selected-join-adapter.mjs", "queue-transport.mjs", "ui-send-guard.mjs", "ui-bridge.ps1"];
+const dependencies = ["project-supervisor.mjs", "project-flow.mjs", "project-host.mjs", "project-workspace.mjs", "smart-policy.mjs", "work-policy.mjs", "work-budget.mjs", "budget.mjs",
+  "project-reservations.mjs", "prompt-queue.mjs", "host-selection.mjs", "model-policy.mjs", "settings.mjs",
+  "selected-join-adapter.mjs", "queue-transport.mjs", "ui-send-guard.mjs", "ui-bridge.ps1", "snapshot-publish.mjs", "atomic-file.mjs"];
 export function snapshotProjectSupervisor(dataDir) {
   const source = path.dirname(fileURLToPath(import.meta.url));
   const contents = dependencies.map(file => [file, fs.readFileSync(path.join(source, file))]);
@@ -19,7 +20,7 @@ export function snapshotProjectSupervisor(dataDir) {
   if (!fs.existsSync(runtime)) {
     const staging = fs.mkdtempSync(path.join(path.dirname(runtime), "staging-"));
     for (const [file, bytes] of contents) fs.writeFileSync(path.join(staging, file), bytes, { flag: "wx" });
-    try { fs.renameSync(staging, runtime); } catch (error) { if (!fs.existsSync(runtime)) throw error; }
+    publishSnapshot(staging, runtime);
   }
   for (const [file, bytes] of contents) if (!fs.readFileSync(path.join(runtime, file)).equals(bytes)) throw new Error("Project supervisor snapshot integrity failed");
   return runtime;

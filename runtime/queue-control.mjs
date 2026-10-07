@@ -7,6 +7,7 @@ import { createPromptQueue } from "./prompt-queue.mjs";
 import { launchSupervisor } from "./supervisor-launch.mjs";
 import { readHostTurnState, readHostTurnReceipt, findHostTurnsForPrompt, verifyInitialSelection } from "./host-selection.mjs";
 import { dispatchPrompt } from "./queue-transport.mjs";
+import { prepareWorkEntry } from "./work-entry.mjs";
 
 async function main() {
   const action = process.argv[2];
@@ -22,7 +23,9 @@ async function main() {
   const queue = createPromptQueue({ dataDir, readHost: readHostTurnState, readReceipt: readHostTurnReceipt,
     findPromptTurns: findHostTurnsForPrompt, verifyInitial: verifyInitialSelection, dispatch: dispatchPrompt,
     startSupervisor: state => launchSupervisor(dataDir, state) });
-  const state = action === "prepare" ? await queue.start({ ...args, startPaused: true })
+  const entry = action === "prepare" ? await prepareWorkEntry(dataDir, args) : null;
+  if (entry?.pending) { process.stdout.write(JSON.stringify(entry.pending) + "\n"); return; }
+  const state = action === "prepare" ? await queue.start({ ...entry.args, startPaused: true })
     : action === "resume" ? await queue.resume(args.runId)
     : action === "cancel" ? queue.cancel(args.runId) : queue.getStatus(args.runId);
   // Prompts remain in local state; compact output is enough to verify startup.

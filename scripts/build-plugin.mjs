@@ -15,7 +15,11 @@ files.push("project-flow.mjs", "project-host.mjs", "project-workspace.mjs", "pro
 files.push("native-flow.mjs", "native-flow-control.mjs", "native-flow-tools.mjs", "native-flow-watch.mjs");
 files.push("native-join-supervisor.mjs", "native-join-control.mjs");
 files.push("selected-join-adapter.mjs");
+files.push("native-coordinator-supervisor.mjs");
+files.push("snapshot-publish.mjs");
+files.push("atomic-file.mjs");
 const hashes = {};
+files.push("smart-policy.mjs", "work-policy.mjs", "work-entry.mjs", "review-policy.mjs", "native-settings.mjs", "work-budget.mjs", "measurements.mjs");
 for (const relative of files) {
   const contents = fs.readFileSync(path.join(repo, "runtime", relative), "utf8").replace(/\r\n/g, "\n");
   const target = path.join(plugin, "runtime", relative);
@@ -36,7 +40,7 @@ for (const relative of ["scripts/configure-web-tunnel.ps1", "scripts/import-lega
   packageHashes[relative] = crypto.createHash("sha256").update(contents).digest("hex");
 }
 const portable = { $schema: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", name: overlay.name, version: overlay.version,
-  description: overlay.description, author: overlay.author, extensions: { "com.openai": { interface: overlay.interface, hooks: "./hooks/hooks.json" } } };
+  description: overlay.description, author: overlay.author, extensions: { "com.openai": { interface: overlay.interface, hooks: "./hooks/hooks.json", onboardingSkill: "./skills/setup/SKILL.md" } } };
 // Current Codex skips plugin hooks when root plugin.json selects AgentPlugin format.
 // Keep portable metadata as an export only; local installation uses .codex-plugin/.
 if (fs.existsSync(path.join(plugin, "plugin.json"))) throw new Error("Root plugin.json disables local hooks on this host. Remove the generated root manifest before bundling.");

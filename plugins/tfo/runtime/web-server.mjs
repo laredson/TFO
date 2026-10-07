@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { connectionCheck, connectionResource } from "./connection-check.mjs";
 import { createWebQueueStore } from "./web-queue.mjs";
 
-const VERSION = "1.0.0-rc.2";
+const VERSION = "1.0.0-rc.3";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const queueResource = "ui://tfo/web-queue-v1.html";
 const object = properties => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });

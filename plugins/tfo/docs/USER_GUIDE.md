@@ -1,10 +1,12 @@
-# Guía de usuario · TFO 1.0.0-rc.2
+# Guía de usuario · TFO 1.0.0-rc.3
+
+Esta candidata incorpora [Inteligente, Custom, uso, permisos y mediciones](SMART_MODES.md). Una instalación nueva usa Automático · Permitir siempre · Inteligente Normal; una actualización conserva preferencias explícitas. La aceptación del paquete instalado y la comparativa se registran por separado.
 
 ## Antes de empezar
 
 Requisitos: Node.js 20 o superior, Codex CLI y PowerShell 7 en Windows. El motor no requiere instalar dependencias de npm.
 
-Este RC está diseñada para **Windows con Codex local**. La carpeta y los permisos de trabajo los determina el host. Revisa el objetivo, los límites de escritura y las tareas antes de autorizar una ruta; TFO no convierte una carpeta de trabajo en un sandbox.
+Este RC está diseñado para **Windows con Codex local**. La carpeta y los permisos de trabajo los determina el host. Revisa el objetivo, los límites de escritura y las tareas antes de autorizar una ruta; TFO no convierte una carpeta de trabajo en un sandbox.
 
 ## Elegir una modalidad
 
@@ -14,14 +16,18 @@ Pide una secuencia acotada de prompts para el chat actual. TFO guarda los pasos 
 
 ### Cadenas supervisadas
 
-Para dividir el trabajo, pide cadenas con tareas, dependencias y resultados esperados. Cada tarea puede indicar modelo y esfuerzo. El llamador activo prepara y ejecuta las llamadas nativas de Codex una vez cada una; TFO conserva los resultados y verifica selección y recibos antes de habilitar dependencias. El retorno final es un paso independiente que espera a que terminen las cadenas y el turno de origen. La integración también lleva una selección justificada por tarea: para una integración de código acotada, la decisión inicial puede ser GPT-6.1 Sol medio; para una comprobación mecánica, Luna. TFO debe aplicar y verificar lo pedido, sin heredar otro modelo como sustituto silencioso. El cambio del principal usa el adaptador de interfaz: deja visible el marcador exacto que entregue TFO y el editor vacío. Si no puede verificar destino y selección, exige revisión antes de enviar. El nombre de la herramienta avanzada es `tfo_budgeted_chat_start`.
+Para dividir el trabajo, pide cadenas con tareas, dependencias y resultados esperados. La modalidad nueva mantiene activo al principal: abre auxiliares, recibe resultados, adapta tareas e integra dentro del mismo turno. Cada tarea lleva una selección justificada de modelo y esfuerzo; la del principal permanece fija durante su turno. TFO conserva y verifica recibos. El principal realiza los commits, pushes y PR borrador autorizados; los auxiliares entregan cambios locales.
+
+En Opciones, el paralelismo predeterminado permite de 1 a 100 trabajadores, con 2 inicialmente. Un cambio global afecta a coordinaciones nuevas; el control de cada flujo permite cambiar su límite en caliente sin interrumpir trabajo activo. El máximo configurado no garantiza capacidad de Codex. Git requiere worktrees separados y comprobados antes de permitir escrituras auxiliares.
+
+Ante una caída verificada o cierre prematuro, TFO puede reactivar el principal tres veces como máximo, con esperas de 1, 3 y 10 minutos. Una espera legítima, pausa o interrupción ambigua no dispara recuperación. Un envío incierto se comprueba antes de continuar y no se repite automáticamente. Las ejecuciones anteriores conservan el retorno diferido y sus límites.
 
 Los cambios de selección por tarea se han verificado en el flujo integrado, pero siguen siendo supervisados. No equivalen a ejecución autónoma completa.
 
 ## Durante una ruta
 
 1. Comprueba que el plan describe el resultado esperado y los límites autorizados.
-2. Inicia la modalidad adecuada y deja que el turno actual termine cuando se indique.
+2. En la coordinación activa, el principal sigue trabajando o esperando hasta verificar la integración y cerrar la coordinación. La modalidad diferida indica cuándo acabar el turno fuente.
 3. Revisa el estado, las selecciones observadas y los resultados que vuelven al principal.
 4. Inspecciona e integra los cambios y ejecuta las comprobaciones apropiadas para tu proyecto.
 

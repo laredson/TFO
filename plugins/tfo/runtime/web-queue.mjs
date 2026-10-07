@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { replaceAtomicFile } from "./atomic-file.mjs";
 
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const text = (value, name, max) => {
@@ -63,7 +64,7 @@ export function createWebQueueStore(dataDir) {
         state.status = "cancelled"; state.revision++; state.updatedAt = new Date().toISOString();
         const temporary = `${target}.${crypto.randomUUID()}.tmp`;
         fs.writeFileSync(temporary, JSON.stringify(state, null, 2));
-        fs.renameSync(temporary, target);
+        replaceAtomicFile(temporary, target);
         return state;
       } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
     },

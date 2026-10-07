@@ -1,5 +1,21 @@
 # Notas de TFO
 
+## 1.0.0-rc.3 — Modos, uso y permisos
+
+- Inteligente Normal predeterminado; Ahorro, Rápido, MaxSpeed, Calidad, HQ, Máximo y MaxHQ, más Custom.
+- Configuración versión 3 con migración que conserva preferencias, límites y ejecuciones históricas.
+- Elección de uso por trabajo, permisos por proyecto/cadena y bloqueo de nuevos envíos al deshabilitar o revocar.
+- Revisión independiente y cobertura de correcciones para HQ/MaxHQ; decisiones Normal/solicitada/observada.
+- Panel local renovado y opciones nativas `openai/settings`, cuya representación se ha confirmado en Codex.
+- Exportación de mediciones con datos ausentes explícitos; comparativa Defold posterior a la aceptación.
+- Nuevas ejecuciones deben usar las entradas de coordinación nativa o colas; las entradas antiguas de creación se retiran para evitar saltarse las políticas nuevas. Sus controles de ejecuciones guardadas se conservan.
+
+Validación: 242 pruebas automatizadas, panel local probado en navegador y flujo HQ real con dos turnos de un auxiliar, integración, revisor independiente y recibo final del principal. Se han verificado las selecciones Sol 6.1 medio y Astra medio. Las capturas del usuario confirman las opciones nativas del paquete instalado `1.0.0-rc.3+codex.1`.
+
+Esta publicación es una prerelease para Windows/Codex local. Quedan pendientes la aceptación de worktrees nativos y la comparativa Defold acordada antes de la promoción a Latest. No incluye publicación en GPTD ni el adaptador completo de ChatGPT; las estimaciones no son mediciones de rendimiento ni de cuota.
+
+Descarga el ZIP local para instalar en Codex y sigue [INSTALL.md](https://github.com/laredson/TFO/blob/v1.0.0-rc.3/INSTALL.md). Se incluyen un ZIP portable y sumas SHA-256; el formato portable no acredita compatibilidad con ChatGPT web.
+
 ## 1.0.0-rc.2 — Sol 6.1
 
 Sol 6.1 sustituye a Sol 6 en nuevas decisiones automáticas del nivel Sol. Sol 6 sigue disponible cuando el usuario lo pide explícitamente. Se conservan los IDs exactos de selecciones de origen, recibos y planes ya aprobados.

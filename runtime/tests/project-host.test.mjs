@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { nativeProjectHost } from "../project-host.mjs";
+import { nativeProjectHost, createProjectQueueSender, isHostCapacityRejection, preflightNativeRecoveryAccess } from "../project-host.mjs";
 
 const thread = "22222222-2222-2222-2222-222222222222", source = "11111111-1111-1111-1111-111111111111";
 function fixture(t, options = {}) {
@@ -38,4 +38,31 @@ for (const [name, options] of [["foreign source", { source: thread }], ["wrong n
 test("bootstrap rejects duplicates and intervening user input", async t => {
   await assert.rejects(fixture(t, { duplicate: true })(), /Duplicate/);
   assert.equal((await fixture(t, { extraUser: true })()).bootstrapVerified, false);
+});
+
+test("capacity preflight proves rejection before any queue process starts", async () => {
+  let executions = 0;
+  const send = createProjectQueueSender({ preflightCapacity: async () => ({ available: false, retryAfterMs: 2500 }),
+    executeQueue: async () => { executions++; return {}; } });
+  await assert.rejects(send(thread, "task"), error => isHostCapacityRejection(error) && error.retryAfterMs === 2500 && error.capacityProof.threadId === thread);
+  assert.equal(executions, 0);
+});
+
+test("queue capacity wording and post-start flags never establish a safe rejection", async () => {
+  for (const failure of [new Error("worker capacity is full"), Object.assign(new Error("capacity"), { code: "HOST_CAPACITY", deliveryAttempted: false })]) {
+    const send = createProjectQueueSender({ executeQueue: async () => { throw failure; } });
+    await assert.rejects(send(thread, "task"), error => error.deliveryAttempted === true && !isHostCapacityRejection(error));
+  }
+  const send = createProjectQueueSender({ executeQueue: async () => ({ stdout: "HOST_CAPACITY deliveryAttempted=false" }) });
+  await assert.rejects(send(thread, "task"), error => error.deliveryAttempted === true && !isHostCapacityRejection(error));
+});
+
+test("recovery access failures preserve state before queue delivery can start", async () => {
+  const unavailable = await preflightNativeRecoveryAccess(async () => { throw Object.assign(new Error("readonly state database"), { code: "EACCES" }); });
+  assert.deepEqual(unavailable, { available: false, reason: "readonly state database", messageSent: false });
+  assert.equal((await preflightNativeRecoveryAccess(async () => ({}))).available, false);
+  assert.equal((await preflightNativeRecoveryAccess(async () => ({ queueInterface: true, stateAccess: true, messageSent: true }))).available, false);
+  const ready = await preflightNativeRecoveryAccess(async () => ({ checkedAt: "verified", queueInterface: true, stateAccess: true, messageSent: false }));
+  assert.equal(ready.available, true);
+  assert.equal(ready.messageSent, false);
 });

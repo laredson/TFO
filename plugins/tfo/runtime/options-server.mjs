@@ -9,12 +9,21 @@ import { createSettingsStore, UPGRADE_WARNING } from "./settings.mjs";
 import { createChatRouter } from "./chat-route.mjs";
 import { createPromptQueue } from "./prompt-queue.mjs";
 import { decideModel } from "./model-policy.mjs";
+import { createProjectFlow } from "./project-flow.mjs";
+import { createNativeFlow } from "./native-flow.mjs";
+import { nativeProjectHost } from "./project-host.mjs";
+import { createWorkPolicyStore } from "./work-policy.mjs";
+import { readSmartCatalog } from "./work-entry.mjs";
+import { assertAvailable, PRESET_GUIDANCE } from "./smart-policy.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export async function createOptionsServer(dataDir) {
+export async function createOptionsServer(dataDir, { readCatalog = readSmartCatalog } = {}) {
   const store = createSettingsStore(dataDir);
+  const policies = createWorkPolicyStore(dataDir);
   const router = createChatRouter({ dataDir, dispatch: async () => { throw new Error("Options cannot dispatch prompts"); }, deferDispatch: true });
   const queue = createPromptQueue({ dataDir });
+  const projectFlow = createProjectFlow({ dataDir, host: nativeProjectHost });
+  const nativeFlow = createNativeFlow({ dataDir, host: nativeProjectHost });
   const token = crypto.randomBytes(32).toString("hex");
   const challenges = new Map();
   let origin;
@@ -44,6 +53,8 @@ export async function createOptionsServer(dataDir) {
     if (req.headers.authorization !== `Bearer ${token}`) return send(403, { error: "Reopen Options from TFO" });
     try {
       if (req.method === "GET" && req.url === "/api/settings") return send(200, store.read());
+      if (req.method === "GET" && req.url === "/api/catalog") return send(200, { models: await readCatalog(), presets: PRESET_GUIDANCE });
+      if (req.method === "GET" && req.url === "/api/work-policies") return send(200, policies.list());
       if (req.method === "GET" && req.url === "/api/routes") {
         const dir = path.join(dataDir, "runs");
         const routes = [];
@@ -68,13 +79,45 @@ export async function createOptionsServer(dataDir) {
                 progressPercent: Math.min(100, Math.round((Date.now() - Date.parse(state.startedAt)) / 60000 / state.time.targetMinutes * 100)) } : null });
           } catch { /* A corrupt route is handled by the route tool. */ }
         }
-        return send(200, routes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 30));
+        for (const [folder, singleFile] of [["native-flows", true], ["parallel", false]]) {
+          const flowDir = path.join(dataDir, folder);
+          for (const entry of fs.existsSync(flowDir) ? fs.readdirSync(flowDir, { withFileTypes: true }) : []) {
+            if (singleFile ? !entry.isFile() || !/^flow_[a-z0-9_]+\.json$/.test(entry.name) : !entry.isDirectory() || !/^flow_[a-z0-9_]+$/.test(entry.name)) continue;
+            try {
+              const state = JSON.parse(fs.readFileSync(singleFile ? path.join(flowDir, entry.name) : path.join(flowDir, entry.name, "state.json"), "utf8"));
+              const maxParallelWorkers = state.maxParallelWorkers ?? (singleFile ? 2 : 8);
+              routes.push({ id: state.id, kind: state.kind, objective: state.objective, status: state.status,
+                completed: state.nodes.filter(node => node.checkpoint && (node.status === "completed" || node.resolution?.status === "resolved")).length, total: state.nodes.length,
+                maxParallelWorkers,
+                effectiveMaxParallelWorkers: Math.min(maxParallelWorkers, state.capacityBackpressure?.effectiveMaxParallelWorkers ?? 100),
+                capacityBackpressure: state.capacityBackpressure ? { retryAt: state.capacityBackpressure.retryAt, code: state.capacityBackpressure.code } : null,
+                activeWorkers: state.nodes.filter(node => node.lane !== "main" && ["current", "dispatching", "queued", "running", "provisioning_dispatching", "provisioning"].includes(node.status)).length,
+                coordinationMode: state.coordinationMode ?? "deferred_join", error: state.error, updatedAt: state.updatedAt,
+                checkpoints: [], execution: null });
+            } catch { /* Preserve damaged flow data for its dedicated diagnostic tool. */ }
+          }
+        }
+        return send(200, routes.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))).slice(0, 30));
       }
       if (req.method !== "POST" || req.headers.origin !== origin || req.headers["content-type"] !== "application/json") return send(403, { error: "Expected a local JSON request" });
       let body = "";
       for await (const chunk of req) { body += chunk; if (Buffer.byteLength(body) > 4096) { send(413, { error: "Request too large" }); return; } }
       const args = JSON.parse(body || "{}");
+      if (req.url === "/api/work-choice") {
+        const next = { ...policies.get(args.workId).configuration, ...args.policy };
+        if (next.mode === "custom") assertAvailable({ model: next.customModel, reasoning: next.customEffort }, await readCatalog());
+        return send(200, policies.choose(args.workId, args));
+      }
+      if (req.url === "/api/work-permission") return send(200, policies.grant(args.workId, args.scope));
+      if (req.url === "/api/work-revoke") return send(200, policies.revoke(args.grantId));
       if (req.url === "/api/routes/control") {
+        if (/^flow_[a-z0-9_]+$/.test(args.runId || "")) {
+          if (args.action !== "set_parallelism") return send(400, { error: "Unsupported flow action" });
+          const nativePath = path.join(dataDir, "native-flows", `${args.runId}.json`);
+          const control = fs.existsSync(nativePath) ? nativeFlow : projectFlow;
+          const state = await control.setParallelism(args.runId, args.maxParallelWorkers, true);
+          return send(200, { id: state.id, status: state.status, maxParallelWorkers: state.maxParallelWorkers });
+        }
         if (!/^(chat|queue)_[a-z0-9_]+$/.test(args.runId || "")) return send(400, { error: "Invalid chat route" });
         const control = args.runId.startsWith("queue_") ? queue : router;
         if (args.action === "pause") return send(200, control.pause(args.runId));
@@ -88,6 +131,10 @@ export async function createOptionsServer(dataDir) {
         return send(200, { challenge, warning: UPGRADE_WARNING });
       }
       if (req.url === "/api/settings") {
+        if (args.patch?.customModel || args.patch?.customEffort || args.patch?.mode === "custom") {
+          const next = { ...store.read(), ...args.patch };
+          assertAvailable({ model: next.customModel, reasoning: next.customEffort }, await readCatalog());
+        }
         if (args.patch?.allowUpgrades === true && !store.read().allowUpgrades) {
           const expires = challenges.get(args.challenge);
           challenges.delete(args.challenge);

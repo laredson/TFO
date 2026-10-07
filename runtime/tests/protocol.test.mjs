@@ -10,6 +10,24 @@ import { fileURLToPath } from "node:url";
 
 const runtime = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+test("MCP exposes active coordination, compact waiting and configurable 100-worker limits", async t => {
+  const client = await createClient(t);
+  const listed = (await client.call("tools/list")).result.tools;
+  assert.equal(new Set(listed.map(tool => tool.name)).size, listed.length);
+  const find = name => listed.find(tool => tool.name === name);
+  const native = find("tfo_native_prepare").inputSchema.properties;
+  assert.equal(native.coordinationMode.default, "active_main");
+  assert.ok(native.workspaceMode.enum.includes("git_worktrees"));
+  assert.equal(native.maxParallelWorkers.maximum, 100);
+  assert.equal(native.lanes.maxItems, 100);
+  assert.equal(native.nodes.maxItems, 1000);
+  assert.equal(find("tfo_native_wait").inputSchema.properties.timeoutMs.maximum, 60000);
+  for (const operation of ["results", "defer_dispatch", "revise", "checkpoint", "finish", "pause", "resume", "cancel", "reconcile", "recover"]) assert.ok(find(`tfo_native_${operation}`), operation);
+  assert.ok(find("tfo_parallel_set_parallelism"));
+  const options = (await client.call("tools/call", { name: "tfo_settings", arguments: {} })).result.structuredContent;
+  assert.equal(options.maxParallelWorkers, 2);
+});
+
 test("MCP advertises Sol 6.1 in every selection enum and marks Sol 6 explicit-only", async t => {
   const client = await createClient(t);
   const listed = await client.call("tools/list");
@@ -55,7 +73,7 @@ async function createClient(t, extraEnv = {}) {
     await once(child, "exit").catch(() => {});
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
-  return { call };
+  return { call, dataDir };
 }
 
 test("initializes as MCP and exposes the first route tools", async t => {
@@ -65,13 +83,14 @@ test("initializes as MCP and exposes the first route tools", async t => {
   assert.equal(initialized.result.serverInfo.name, "tfo");
   const listed = await client.call("tools/list");
   assert.deepEqual(listed.result.tools.map(tool => tool.name), [
-    "tfo_parallel_prepare", "tfo_parallel_bind", "tfo_parallel_start", "tfo_parallel_status", "tfo_parallel_pause", "tfo_parallel_resume", "tfo_parallel_cancel",
+    "tfo_parallel_prepare", "tfo_parallel_bind", "tfo_parallel_set_parallelism", "tfo_parallel_start", "tfo_parallel_status", "tfo_parallel_pause", "tfo_parallel_resume", "tfo_parallel_cancel",
     "tfo_native_prepare", "tfo_native_claim", "tfo_native_acknowledge", "tfo_native_observe", "tfo_native_status", "tfo_native_fail",
+    "tfo_native_wait", "tfo_native_results", "tfo_native_defer_dispatch", "tfo_native_revise", "tfo_native_checkpoint", "tfo_native_finish", "tfo_native_pause", "tfo_native_resume", "tfo_native_cancel", "tfo_native_reconcile", "tfo_native_recover",
     "tfo_health", "tfo_connection_check", "tfo_connection_panel", "tfo_ui_diagnostic", "tfo_queue_start", "tfo_queue_status", "tfo_queue_pause", "tfo_queue_cancel", "tfo_queue_resume", "tfo_queue_reconcile",
     "tfo_project_prepare", "tfo_project_status", "tfo_project_pause", "tfo_project_resume", "tfo_project_cancel", "tfo_project_recover",
     "tfo_start", "tfo_get_status", "tfo_pause", "tfo_resume", "tfo_cancel",
     "tfo_chat_start", "tfo_catalog", "tfo_preview", "tfo_budgeted_chat_start", "tfo_chat_status", "tfo_chat_complete", "tfo_chat_pause", "tfo_chat_resume", "tfo_chat_cancel",
-    "tfo_settings", "tfo_options",
+    "tfo_settings", "tfo_options", "tfo_work_prepare", "tfo_settings_read", "tfo_settings_update", "tfo_measurements",
   ]);
 });
 
@@ -140,7 +159,7 @@ test("rejects routes with missing project paths and unsupported models", async t
   assert.equal(unsupportedModel.result.isError, true);
 });
 
-test("persists a started route and reports a missing worker safely", async t => {
+test("saved legacy routes can resume while new legacy entry points redirect to policy-aware tools", async t => {
   const client = await createClient(t, { TFO_CODEX_COMMAND: "tfo-codex-command-that-does-not-exist" });
   const started = await client.call("tools/call", { name: "tfo_start", arguments: {
     objective: "Exercise persisted route state",
@@ -148,7 +167,16 @@ test("persists a started route and reports a missing worker safely", async t => 
     constraints: "No external actions",
     steps: [{ id: "first", title: "First bounded step", instruction: "Do not modify files", model: "gpt-6-luna", reasoning: "high" }],
   } });
-  const route = started.result.structuredContent;
+  assert.equal(started.result.isError, true);
+  assert.match(started.result.content[0].text, /legacy entry point/);
+  const id = "route_legacy_saved", dir = path.join(client.dataDir, "runs", id);
+  fs.mkdirSync(dir, { recursive: true });
+  const initial = { model: "gpt-6-luna", reasoning: "high" };
+  fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify({ id, status: "paused", projectPath: os.tmpdir(), objective: "Saved legacy route",
+    steps: [{ id: "first", title: "First bounded step", instruction: "Do not modify files", ...initial }], currentIndex: 0, completedSteps: [],
+    execution: { current: initial, ceiling: initial }, modelDecisions: [], startedAt: new Date().toISOString() }));
+  const resumed = await client.call("tools/call", { name: "tfo_resume", arguments: { runId: id } });
+  const route = resumed.result.structuredContent;
   assert.equal(route.status, "running");
   assert.equal(route.totalSteps, 1);
   assert.equal(route.currentStep.model, "gpt-6-luna");

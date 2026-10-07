@@ -9,7 +9,7 @@ export function verifyHookReceipt(dataDir, threadId, runtimeDir = path.dirname(f
   try { signal = JSON.parse(fs.readFileSync(path.join(dataDir, "hook-signals", `${threadId}.json`), "utf8")); }
   catch { throw new Error("No real Stop receipt for this chat. Finish a diagnostic turn before arming TFO."); }
   if (signal.threadId !== threadId || signal.stopHookActive !== false || !path.isAbsolute(signal.runtimeRoot || "")) throw new Error("Invalid Stop receipt");
-  for (const name of ["stop-hook.mjs", "queue-supervisor.mjs", "prompt-queue.mjs", "queue-transport.mjs", "ui-bridge.ps1"]) {
+  for (const name of ["stop-hook.mjs", "queue-supervisor.mjs", "prompt-queue.mjs", "queue-transport.mjs", "ui-bridge.ps1", "atomic-file.mjs"]) {
     let observed;
     try { observed = fs.readFileSync(path.join(signal.runtimeRoot, name), "utf8"); }
     catch { throw new Error("The last Stop receipt points to a removed installation. Finish a turn with the current plugin before arming TFO."); }

@@ -1,4 +1,6 @@
-# TFO 1.0.0-rc.2 local package
+# TFO 1.0.0-rc.3 local package
+
+Esta candidata incorpora [Inteligente, Custom, uso, permisos y mediciones](docs/SMART_MODES.md). Una instalación nueva usa Automático · Permitir siempre · Inteligente Normal; una actualización conserva preferencias explícitas. La aceptación del paquete instalado y la comparativa se registran por separado.
 
 The new package identity is `tfo`, with a separate `tfo-local` catalogue. Its local manifest is `plugins/tfo/.codex-plugin/plugin.json`. `plugin.portable.json` is an export only; do not create a root `plugin.json` for the local install, because that format suppresses the Stop hook on this host.
 

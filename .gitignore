@@ -5,3 +5,5 @@ dist/
 *.log
 .env
 .env.*
+docs/RC_VALIDATION.md
+plugins/tfo/docs/RC_VALIDATION.md
